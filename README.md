@@ -3,6 +3,57 @@
 Template panel admin — Vite 8 · React 19 · TypeScript 7 · Tailwind 4 · TanStack Router.
 Antarmuka Bahasa Indonesia, autentikasi Google, dan kendali akses berbasis peran.
 
+![Dasbor Ozora Panel](docs/tangkapan-layar/dasbor-terang.png)
+
+<p align="center">
+  <b>101 halaman siap pakai · Bahasa Indonesia · lolos WCAG 2.1 AA</b><br>
+  <sub>Build menghasilkan folder statis — bisa langsung naik ke cPanel, VPS, atau CDN mana pun.</sub>
+</p>
+
+---
+
+## Tampilan
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/tangkapan-layar/dasbor-terang.png" alt="Dasbor mode terang"></td>
+    <td width="50%"><img src="docs/tangkapan-layar/dasbor-gelap.png" alt="Dasbor mode gelap"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Mode terang</b></td>
+    <td align="center"><b>Mode gelap</b> — dirancang terpisah, bukan sekadar balik warna</td>
+  </tr>
+</table>
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/tangkapan-layar/kasir.png" alt="Halaman kasir"></td>
+    <td width="50%"><img src="docs/tangkapan-layar/etalase.png" alt="Halaman etalase"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Kasir (POS)</b> — keranjang, diskon, hitung kembalian, struk cetak</td>
+    <td align="center"><b>Etalase</b> — filter kategori & harga, checkout tiga langkah</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/tangkapan-layar/pengguna.png" alt="Halaman pengguna dan peran"></td>
+    <td width="50%"><img src="docs/tangkapan-layar/absensi.png" alt="Halaman absensi"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Pengguna &amp; peran</b> — jalur emas CRUD, tinggal disalin</td>
+    <td align="center"><b>Absensi</b> — peta kalor kehadiran 30 hari</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/tangkapan-layar/laporan.png" alt="Pusat laporan"></td>
+    <td width="50%"><img src="docs/tangkapan-layar/pengaturan-merek.png" alt="Pengaturan merek"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Pusat laporan</b> — penjualan, stok, laba rugi, kepegawaian</td>
+    <td align="center"><b>Pengaturan merek</b> — ganti logo, favicon, warna dari panel</td>
+  </tr>
+</table>
+
+---
+
 ## Mulai
 
 ```bash

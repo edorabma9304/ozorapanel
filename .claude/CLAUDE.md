@@ -33,6 +33,9 @@ Setelah menambah berkas rute, jalankan `pnpm build` (atau `pnpm dev`) agar tipen
    berkas driver, bukan menyunting halaman.
 2. **Pakai token warna, bukan warna mentah.** `bg-primary`, bukan `bg-blue-500`.
    Token ada di `src/styles/globals.css`; warna mentah tidak ikut mode gelap.
+   Teks berwarna di atas latar terang/gelap memakai varian `-kuat`
+   (`text-success-kuat`), dan **setiap token wajib punya pasangan di blok
+   `.dark`** — kalau tidak, mode gelap memakai nilai mode terang dan kontrasnya jatuh.
 3. **Jangan rangkai nama kelas Tailwind saat runtime.** `` `bg-${warna}` `` tidak akan
    pernah ter-generate. Pakai peta statis (contoh: `WARNA_TITIK` di `topbar.tsx`).
 4. **Tambah halaman = tambah entri di `src/config/menu.ts`.** Jangan menyunting `Sidebar`.

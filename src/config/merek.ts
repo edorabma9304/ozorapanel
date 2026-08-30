@@ -1,4 +1,5 @@
 import { APP, KUNCI_SIMPANAN } from './app'
+import { varianMerek } from '@/lib/warna'
 
 /**
  * Identitas visual aplikasi.
@@ -52,12 +53,48 @@ export function simpanMerek(merek: Merek) {
   for (const cb of pendengar) cb(merek)
 }
 
-/** Timpa token warna Tailwind di tingkat dokumen. */
+const ID_GAYA = 'warna-merek'
+
+/**
+ * Timpa token warna merek.
+ *
+ * Ditulis sebagai elemen <style> berisi blok `:root` dan `.dark` terpisah,
+ * BUKAN inline style di documentElement. Inline style berlaku ke kedua tema
+ * sekaligus — itu pernah membuat mode gelap memakai warna isi versi terang
+ * dengan warna teks versi gelap, dan kontrasnya jatuh ke 4,06:1.
+ *
+ * Warna teks tidak ditebak: diturunkan dari warna yang dipilih lewat
+ * perhitungan kontras WCAG, sehingga warna merek apa pun tetap terbaca.
+ */
 export function terapkanWarna(merek: Merek) {
-  const akar = document.documentElement
-  if (merek.warnaUtama) akar.style.setProperty('--primary', merek.warnaUtama)
-  if (merek.warnaAksen) akar.style.setProperty('--secondary', merek.warnaAksen)
-  akar.style.setProperty('--ring', merek.warnaUtama || '#5d87ff')
+  const utama = varianMerek(merek.warnaUtama || MEREK_BAWAAN.warnaUtama)
+  const aksen = varianMerek(merek.warnaAksen || MEREK_BAWAAN.warnaAksen)
+
+  const css = `
+:root {
+  --primary: ${utama.terang.isi};
+  --primary-fg: ${utama.terang.teks};
+  --secondary: ${aksen.terang.isi};
+  --secondary-fg: ${aksen.terang.teks};
+  --ring: ${utama.terang.isi};
+  --sidebar-active: ${utama.terang.isi};
+}
+.dark {
+  --primary: ${utama.gelap.isi};
+  --primary-fg: ${utama.gelap.teks};
+  --secondary: ${aksen.gelap.isi};
+  --secondary-fg: ${aksen.gelap.teks};
+  --ring: ${utama.gelap.isi};
+  --sidebar-active: ${utama.gelap.isi};
+}`
+
+  let gaya = document.getElementById(ID_GAYA)
+  if (!gaya) {
+    gaya = document.createElement('style')
+    gaya.id = ID_GAYA
+    document.head.appendChild(gaya)
+  }
+  gaya.textContent = css
 }
 
 /** Tulis ulang <link rel="icon"> tanpa memuat ulang halaman. */

@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { RotateCcw, Save, Smile, Upload } from 'lucide-react'
+import { Check, RotateCcw, Save, Smile, TriangleAlert, Upload } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { DeskripsiKartu, IsiKartu, JudulKartu, Kartu, KakiKartu, KepalaKartu } from '@/components/ui/kartu'
@@ -11,6 +11,7 @@ import { Peringatan } from '@/components/ui/keadaan'
 import { Tab, DaftarTab, PemicuTab, IsiTab } from '@/components/ui/lapisan'
 import { Lambang } from '@/components/layout/lambang'
 import { bacaMerek, simpanMerek, MEREK_BAWAAN, type Merek } from '@/config/merek'
+import { kontrasTerbaik, teksTerbaca, varianMerek } from '@/lib/warna'
 import { cn } from '@/lib/utils'
 
 const WARNA_SIAP = ['#5d87ff', '#13deb9', '#fa896b', '#ffae1f', '#8b5cf6', '#ec4899', '#0ea5e9', '#2a3547']
@@ -215,24 +216,74 @@ function PengaturanMerek() {
             </div>
           ))}
 
+          {/* Warna merek bebas dipilih, jadi keterbacaannya harus diperiksa
+              di tempat — bukan baru ketahuan saat diaudit. */}
+          <div className="space-y-3">
+            {([['warnaUtama', 'Warna utama'], ['warnaAksen', 'Warna aksen']] as const).map(([kunci, label]) => {
+              const rasio = kontrasTerbaik(merek[kunci])
+              const aman = rasio >= 4.5
+              return (
+                <p
+                  key={kunci}
+                  className={cn(
+                    'flex items-start gap-2 rounded-card p-3 text-xs',
+                    aman ? 'bg-success-soft text-success-kuat' : 'bg-danger-soft text-danger-kuat',
+                  )}
+                  role={aman ? undefined : 'alert'}
+                >
+                  {aman ? <Check className="mt-0.5 size-3.5 shrink-0" /> : <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />}
+                  <span>
+                    <b>{label}</b> — kontras terbaik {rasio.toFixed(2)}:1.{' '}
+                    {aman
+                      ? `Lolos WCAG AA. Teks di atasnya otomatis ${teksTerbaca(merek[kunci]) === '#ffffff' ? 'putih' : 'gelap'}.`
+                      : 'Di bawah 4,5:1 — teks di atas warna ini sulit dibaca. Pilih warna yang lebih pekat atau lebih cerah.'}
+                  </span>
+                </p>
+              )
+            })}
+          </div>
+
           <div className="rounded-card border border-border p-4">
-            <p className="mb-3 text-xs font-bold uppercase tracking-wide text-muted-foreground">Pratinjau</p>
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="flex items-center gap-2.5">
-                {merek.logoTerang ? (
-                  <img src={merek.logoTerang} alt="" className="h-8 w-auto object-contain" />
-                ) : (
-                  <Lambang warnaUtama={merek.warnaUtama} warnaAksen={merek.warnaAksen} className="size-8" />
-                )}
-                <span className="text-[17px] font-extrabold tracking-tight">{merek.nama}</span>
-              </span>
-              <span className="rounded-control px-4 py-2 text-sm font-semibold text-white" style={{ background: merek.warnaUtama }}>
-                Tombol utama
-              </span>
-              {/* Aksen umumnya cerah — teks gelap yang lolos kontras, bukan putih. */}
-              <span className="rounded-control px-4 py-2 text-sm font-semibold text-[#101828]" style={{ background: merek.warnaAksen }}>
-                Aksen
-              </span>
+            <p className="mb-3 text-xs font-bold uppercase tracking-wide text-muted-foreground">
+              Pratinjau di kedua tema
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {(['terang', 'gelap'] as const).map((tema) => {
+                const u = varianMerek(merek.warnaUtama)[tema]
+                const a = varianMerek(merek.warnaAksen)[tema]
+                return (
+                  <div
+                    key={tema}
+                    className="space-y-3 rounded-card border border-border p-3.5"
+                    style={{ background: tema === 'gelap' ? '#1f252f' : '#ffffff' }}
+                  >
+                    <span className="flex items-center gap-2.5">
+                      {merek.logoTerang && tema === 'terang' ? (
+                        <img src={merek.logoTerang} alt="" className="h-7 w-auto object-contain" />
+                      ) : (
+                        <Lambang ukuran={28} warnaUtama={u.isi} warnaAksen={a.isi} />
+                      )}
+                      <span
+                        className="text-[15px] font-extrabold tracking-tight"
+                        style={{ color: tema === 'gelap' ? '#e6ebf3' : '#2a3547' }}
+                      >
+                        {merek.nama}
+                      </span>
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      <span className="rounded-control px-3 py-1.5 text-xs font-semibold" style={{ background: u.isi, color: u.teks }}>
+                        Tombol utama
+                      </span>
+                      <span className="rounded-control px-3 py-1.5 text-xs font-semibold" style={{ background: a.isi, color: a.teks }}>
+                        Aksen
+                      </span>
+                    </div>
+                    <p className="text-[11px]" style={{ color: tema === 'gelap' ? '#9aa7bd' : '#5a6a85' }}>
+                      Mode {tema}
+                    </p>
+                  </div>
+                )
+              })}
             </div>
           </div>
         </IsiKartu>

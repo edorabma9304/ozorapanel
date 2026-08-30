@@ -94,27 +94,22 @@
   --secondary: #49beff;
   --secondary-fg: #101828;
   --secondary-soft: #e8f7ff;
-  --secondary-kuat: #7fd4ff;
   --secondary-kuat: #0075b7;
   --success: #13deb9;
   --success-fg: #101828;
   --success-soft: #e6fffa;
-  --success-kuat: #4de9cb;
   --success-kuat: #0a7361;
   --warning: #ffae1f;
   --warning-fg: #101828;
   --warning-soft: #fef5e5;
-  --warning-kuat: #ffc55c;
   --warning-kuat: #9c6400;
   --danger: #fa896b;
   --danger-fg: #101828;
   --danger-soft: #fdede8;
-  --danger-kuat: #ffa48c;
   --danger-kuat: #cf3107;
   --info: #539bff;
   --info-fg: #101828;
   --info-soft: #ebf3fe;
-  --info-kuat: #85b8ff;
   --info-kuat: #0065f1;
 
   --sidebar: #ffffff;
@@ -141,22 +136,29 @@
   --primary: #6b93ff;
   --primary-fg: #0f1419;
   --primary-soft: #253247;
-  --primary-kuat: #9dbaff;
+  /* Teks berwarna di atas permukaan gelap. Diverifikasi ≥ 4,5:1 terhadap
+     --card (#1f252f), --bg (#171c23), dan masing-masing --x-soft. */
+  --primary-kuat: #8fb0ff;
   --secondary: #49beff;
   --secondary-fg: #0f1419;
   --secondary-soft: #1c3547;
+  --secondary-kuat: #49beff;
   --success: #13deb9;
   --success-fg: #0f1419;
   --success-soft: #1b3a3c;
+  --success-kuat: #13deb9;
   --warning: #ffae1f;
   --warning-fg: #0f1419;
   --warning-soft: #3d3320;
+  --warning-kuat: #ffae1f;
   --danger: #fa896b;
   --danger-fg: #0f1419;
   --danger-soft: #40282a;
+  --danger-kuat: #fa896b;
   --info: #539bff;
   --info-fg: #0f1419;
   --info-soft: #223247;
+  --info-kuat: #539bff;
 
   --sidebar: #1f252f;
   --sidebar-fg: #e6ebf3;

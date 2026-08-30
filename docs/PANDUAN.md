@@ -584,6 +584,9 @@ Daftar ini bukan teori — semuanya pernah terjadi saat template ini dibangun.
 | Mengukur performa dengan `pnpm dev` | 390 permintaan tanpa minifikasi — bukan gambaran produksi | `pnpm build && pnpm preview` |
 | `<Pemisah>` di dalam `<dl>` | Melanggar struktur definition list | Pakai `border-t` pada baris berikutnya |
 | Transparansi teks di atas warna solid | Kontras turun di bawah 4,5:1 | Hindari `opacity-*` pada teks |
+| Menimpa token warna lewat `element.style` | Berlaku ke **kedua** tema sekaligus — mode gelap memakai warna terang | Tulis `<style>` dengan blok `:root` dan `.dark` terpisah |
+| Audit aksesibilitas hanya di satu tema | Mode gelap bisa gagal total tanpa ketahuan | Jalankan axe di mode terang **dan** gelap |
+| `String.replace` non-global saat menyunting CSS | Mengenai cocokan pertama (`:root`), bukan blok yang dituju | Pakai jangkar yang unik per blok, lalu verifikasi hasilnya |
 
 ---
 

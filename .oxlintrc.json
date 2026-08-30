@@ -1,0 +1,52 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": [
+    "react",
+    "typescript",
+    "unicorn",
+    "oxc",
+    "jsx-a11y"
+  ],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn",
+    "perf": "warn"
+  },
+  "env": {
+    "browser": true,
+    "es2024": true
+  },
+  "rules": {
+    "no-console": [
+      "warn",
+      {
+        "allow": [
+          "warn",
+          "error"
+        ]
+      }
+    ],
+    "eqeqeq": "error",
+    "typescript/no-explicit-any": "warn",
+    "react/jsx-key": "error",
+    "react/no-danger": "error",
+    "react/react-in-jsx-scope": "off",
+    "react/jsx-no-target-blank": "error",
+    "jsx-a11y/label-has-associated-control": "off",
+    "jsx-a11y/heading-has-content": "off",
+    "react/no-unstable-nested-components": "off",
+    "unicorn/no-array-sort": "off",
+    "unicorn/consistent-function-scoping": "off",
+    "jsx-a11y/no-autofocus": "off",
+    "react/set-state-in-effect": "warn",
+    "jsx-a11y/no-noninteractive-element-interactions": "warn",
+    "react/no-array-index-key": "warn",
+    "jsx-a11y/prefer-tag-over-role": "off",
+    "jsx-a11y/no-noninteractive-element-to-interactive-role": "warn"
+  },
+  "ignorePatterns": [
+    "dist",
+    "node_modules",
+    "src/routeTree.gen.ts"
+  ]
+}

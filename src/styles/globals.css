@@ -1,0 +1,320 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/plus-jakarta-sans';
+@import 'tw-animate-css';
+
+/* Mode gelap dikendalikan class .dark di <html> — bukan media query,
+   supaya pengguna bisa memilih Terang / Gelap / Ikuti Sistem. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ------------------------------------------------------------------
+   TOKEN DESAIN
+   Semua warna komponen WAJIB memakai token di bawah, bukan warna mentah
+   (jangan `bg-blue-500`, pakai `bg-primary`). Ganti tema cukup di sini.
+   ------------------------------------------------------------------ */
+@theme inline {
+  --font-sans: 'Plus Jakarta Sans Variable', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+
+  --color-background: var(--bg);
+  --color-foreground: var(--fg);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-fg);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-fg);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-fg);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-fg);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-kuat: var(--primary-kuat);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-fg);
+  --color-secondary-soft: var(--secondary-soft);
+  --color-secondary-kuat: var(--secondary-kuat);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-fg);
+  --color-success-soft: var(--success-soft);
+  --color-success-kuat: var(--success-kuat);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-fg);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-kuat: var(--warning-kuat);
+  --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-fg);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-kuat: var(--danger-kuat);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-fg);
+  --color-info-soft: var(--info-soft);
+  --color-info-kuat: var(--info-kuat);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-fg);
+  --color-sidebar-muted: var(--sidebar-muted);
+  --color-sidebar-active: var(--sidebar-active);
+  --color-sidebar-border: var(--sidebar-border);
+
+  --radius-card: 0.5rem;
+  --radius-control: 0.5rem;
+
+  --shadow-soft: 0 1px 2px 0 rgb(37 41 51 / 0.04), 0 6px 20px -4px rgb(37 41 51 / 0.06);
+  --shadow-raised: 0 2px 6px -1px rgb(37 41 51 / 0.08), 0 12px 32px -8px rgb(37 41 51 / 0.12);
+
+  --ease-out-soft: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* ---------------- Tema terang (default) ---------------- */
+:root {
+  --bg: #f4f7fb;
+  --fg: #2a3547;
+  --card: #ffffff;
+  --card-fg: #2a3547;
+  --popover: #ffffff;
+  --popover-fg: #2a3547;
+  --muted: #f2f6fa;
+  --muted-fg: #5a6a85;
+  --border: #e5eaef;
+  --input: #dfe5ec;
+  --ring: #3469ff;
+
+  /* Nilai di bawah dipilih agar lolos WCAG 2.1 AA (kontras ≥ 4,5:1).
+     - `--x`      : warna isi (dipakai bg-x, fill-x, garis bagan)
+     - `--x-fg`   : teks DI ATAS isi — gelap untuk warna cerah, putih untuk primary
+     - `--x-soft` : latar lembut
+     - `--x-kuat` : teks DI ATAS latar terang (bg-card / bg-x-soft) — dipakai text-x-kuat
+     Palet Modernize asli tidak lolos AA: putih di atas #13deb9 hanya 1,72:1. */
+  --primary: #3469ff;
+  --primary-fg: #ffffff;
+  --primary-soft: #ecf2ff;
+  --primary-kuat: #255dff;
+  --secondary: #49beff;
+  --secondary-fg: #101828;
+  --secondary-soft: #e8f7ff;
+  --secondary-kuat: #7fd4ff;
+  --secondary-kuat: #0075b7;
+  --success: #13deb9;
+  --success-fg: #101828;
+  --success-soft: #e6fffa;
+  --success-kuat: #4de9cb;
+  --success-kuat: #0a7361;
+  --warning: #ffae1f;
+  --warning-fg: #101828;
+  --warning-soft: #fef5e5;
+  --warning-kuat: #ffc55c;
+  --warning-kuat: #9c6400;
+  --danger: #fa896b;
+  --danger-fg: #101828;
+  --danger-soft: #fdede8;
+  --danger-kuat: #ffa48c;
+  --danger-kuat: #cf3107;
+  --info: #539bff;
+  --info-fg: #101828;
+  --info-soft: #ebf3fe;
+  --info-kuat: #85b8ff;
+  --info-kuat: #0065f1;
+
+  --sidebar: #ffffff;
+  --sidebar-fg: #2a3547;
+  --sidebar-muted: #617799;
+  --sidebar-active: #3469ff;
+  --sidebar-border: #e9edf2;
+}
+
+/* ---------------- Tema gelap ---------------- */
+.dark {
+  --bg: #171c23;
+  --fg: #e6ebf3;
+  --card: #1f252f;
+  --card-fg: #e6ebf3;
+  --popover: #1f252f;
+  --popover-fg: #e6ebf3;
+  --muted: #262d38;
+  --muted-fg: #9aa7bd;
+  --border: #333c4b;
+  --input: #3b4553;
+  --ring: #6b93ff;
+
+  --primary: #6b93ff;
+  --primary-fg: #0f1419;
+  --primary-soft: #253247;
+  --primary-kuat: #9dbaff;
+  --secondary: #49beff;
+  --secondary-fg: #0f1419;
+  --secondary-soft: #1c3547;
+  --success: #13deb9;
+  --success-fg: #0f1419;
+  --success-soft: #1b3a3c;
+  --warning: #ffae1f;
+  --warning-fg: #0f1419;
+  --warning-soft: #3d3320;
+  --danger: #fa896b;
+  --danger-fg: #0f1419;
+  --danger-soft: #40282a;
+  --info: #539bff;
+  --info-fg: #0f1419;
+  --info-soft: #223247;
+
+  --sidebar: #1f252f;
+  --sidebar-fg: #e6ebf3;
+  --sidebar-muted: #9aa9c0;
+  --sidebar-active: #6b93ff;
+  --sidebar-border: #2e3743;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  /* Fokus keyboard selalu terlihat — syarat aksesibilitas. */
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+  ::selection {
+    background: var(--color-primary-soft);
+    color: var(--color-foreground);
+  }
+}
+
+@layer utilities {
+  /* Scrollbar tipis khas panel admin. */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-input) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: var(--color-input);
+    border-radius: 9999px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+/* Hormati pengguna yang mematikan animasi di OS. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Animasi buka/tutup akordeon (butuh tinggi dari Radix). */
+@theme {
+  --animate-accordion-down: accordion-down 0.2s var(--ease-out-soft);
+  --animate-accordion-up: accordion-up 0.2s var(--ease-out-soft);
+}
+@keyframes accordion-down {
+  from { height: 0; opacity: 0; }
+  to { height: var(--radix-accordion-content-height); opacity: 1; }
+}
+@keyframes accordion-up {
+  from { height: var(--radix-accordion-content-height); opacity: 1; }
+  to { height: 0; opacity: 0; }
+}
+
+/* ------------------------------------------------------------------
+   CETAK
+   Lima halaman punya tombol Cetak (struk kasir, faktur, slip gaji,
+   bukti transaksi, laporan). Tanpa aturan ini, hasil cetaknya ikut
+   membawa sidebar, topbar, dan tombol — boros kertas dan tidak terbaca.
+
+   Tandai elemen dengan `data-cetak="sembunyi"` untuk membuangnya dari
+   hasil cetak, atau `data-cetak="isi"` untuk menjadikannya satu-satunya
+   yang tercetak.
+   ------------------------------------------------------------------ */
+@media print {
+  /* Kembalikan ke hitam-putih di atas kertas putih. */
+  :root,
+  :root.dark {
+    --bg: #ffffff;
+    --fg: #000000;
+    --card: #ffffff;
+    --card-fg: #000000;
+    --muted: #f4f4f4;
+    --muted-fg: #333333;
+    --border: #cccccc;
+  }
+
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  /* Kerangka aplikasi tidak ikut tercetak. */
+  aside,
+  header,
+  nav,
+  [data-cetak='sembunyi'],
+  [role='alert'],
+  button:not([data-cetak='tampil']),
+  a[href^='#'] {
+    display: none !important;
+  }
+
+  /* Konten memenuhi lebar kertas, tanpa sisa padding tata letak. */
+  main {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+  .lg\:pl-\[264px\],
+  .lg\:pl-20 {
+    padding-left: 0 !important;
+  }
+
+  /* Kartu jadi blok datar tanpa bayangan. */
+  [class*='rounded-card'] {
+    border: 1px solid #ccc !important;
+    box-shadow: none !important;
+    break-inside: avoid;
+  }
+
+  /* Hanya bagian bertanda `isi` yang dicetak, bila ada. */
+  body:has([data-cetak='isi']) main > *:not(:has([data-cetak='isi'])) {
+    display: none !important;
+  }
+
+  /* Jangan memotong baris tabel di tengah halaman. */
+  tr,
+  img,
+  figure {
+    break-inside: avoid;
+  }
+  thead {
+    display: table-header-group;
+  }
+
+  /* Tampilkan alamat tautan supaya dokumen cetak tetap berguna. */
+  a[href^='http']::after {
+    content: ' (' attr(href) ')';
+    font-size: 10px;
+    color: #555;
+  }
+
+  @page {
+    margin: 14mm;
+  }
+}

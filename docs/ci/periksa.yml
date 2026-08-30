@@ -1,0 +1,46 @@
+name: Periksa
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+
+jobs:
+  periksa:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Pasang dependensi
+        run: pnpm install --frozen-lockfile
+
+      # routeTree.gen.ts di-gitignore, jadi harus dibangkitkan dulu
+      # sebelum typecheck bisa mengenali rutenya.
+      - name: Build (sekaligus bangkitkan route tree)
+        run: pnpm build
+
+      - name: Periksa tipe
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test
+
+      - name: Pastikan demo:strip tetap bisa dibuang
+        run: |
+          cp -r . /tmp/uji-strip
+          cd /tmp/uji-strip
+          node scripts/strip-demo.mjs
+          pnpm build
+          pnpm typecheck

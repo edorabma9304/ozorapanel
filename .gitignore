@@ -1,0 +1,22 @@
+node_modules/
+dist/
+dist-ssr/
+coverage/
+stats.html
+
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+credentials.*
+
+.DS_Store
+*.log
+.vite/
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Dibuat otomatis oleh @tanstack/router-plugin
+src/routeTree.gen.ts

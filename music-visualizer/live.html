@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Multi-Live Studio — kelola beberapa siaran YouTube 24/7 dari video visualizer: daftar channel, stream key, lalu download satu script yang menyalakan semua siaran sekaligus.">
+<meta name="robots" content="noindex">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📡</text></svg>">
+<title>Multi-Live Studio</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --accent: #7c4dff;
+    --bg: #0a0a12;
+    --panel: rgba(20, 20, 35, 0.85);
+    --text: #eef0ff;
+    --muted: #8a8fa8;
+    --ok: #00c853;
+    --warn: #ffb300;
+    --bad: #ff5252;
+  }
+  html, body {
+    min-height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+  }
+  body {
+    background:
+      radial-gradient(1000px 500px at 80% -10%, rgba(124,77,255,0.18), transparent 60%),
+      radial-gradient(800px 400px at 10% 110%, rgba(0,229,255,0.10), transparent 60%),
+      var(--bg);
+    padding: 32px 16px 80px;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; }
+
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 22px; flex-wrap: wrap; }
+  h1 { font-size: 22px; letter-spacing: 0.3px; }
+  h1::before { content: "📡 "; }
+  .back {
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 13px;
+    padding: 8px 14px;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 999px;
+    transition: color 0.2s, border-color 0.2s;
+  }
+  .back:hover { color: var(--text); border-color: var(--accent); }
+
+  section {
+    background: var(--panel);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 18px;
+  }
+  section h2 { font-size: 15px; margin-bottom: 6px; }
+  section p.sub { font-size: 12.5px; color: var(--muted); line-height: 1.6; margin-bottom: 12px; }
+  section p.sub b { color: var(--text); }
+
+  .step { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 10px; font-size: 13px; line-height: 1.6; }
+  .step .n {
+    flex: 0 0 22px; height: 22px;
+    border-radius: 50%;
+    background: rgba(124,77,255,0.25);
+    color: #cdbcff;
+    font-size: 12px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    margin-top: 2px;
+  }
+  code.inline {
+    background: rgba(0,0,0,0.35);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-family: Consolas, monospace;
+    font-size: 12px;
+  }
+  .copybtn {
+    background: none;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 6px;
+    color: var(--muted);
+    font-size: 11px;
+    padding: 2px 8px;
+    cursor: pointer;
+    margin-left: 6px;
+  }
+  .copybtn:hover { color: var(--text); border-color: var(--accent); }
+
+  /* daftar siaran */
+  .stream {
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 12px;
+    background: rgba(0,0,0,0.2);
+  }
+  .stream .rowline { display: flex; gap: 10px; flex-wrap: wrap; }
+  .fld { flex: 1; min-width: 180px; margin-bottom: 8px; }
+  .fld label {
+    display: block;
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    margin-bottom: 5px;
+  }
+  .fld input {
+    width: 100%;
+    padding: 9px 12px;
+    border-radius: 9px;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.05);
+    color: var(--text);
+    font-size: 13px;
+    outline: none;
+  }
+  .fld input:focus { border-color: var(--accent); }
+  .keywrap { position: relative; }
+  .keywrap input { padding-right: 40px; font-family: Consolas, monospace; }
+  .eye {
+    position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+    background: none; border: none; color: var(--muted); cursor: pointer; font-size: 14px;
+  }
+  .eye:hover { color: var(--text); }
+  .stream .foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .stream .hintfile { font-size: 11px; color: var(--muted); }
+  .del {
+    background: none; border: none;
+    color: var(--muted); cursor: pointer; font-size: 12px;
+    text-decoration: underline;
+  }
+  .del:hover { color: var(--bad); }
+  .pickfile {
+    background: none; border: 1px dashed rgba(255,255,255,0.25);
+    border-radius: 8px; color: var(--muted);
+    font-size: 11px; padding: 4px 10px; cursor: pointer;
+  }
+  .pickfile:hover { border-color: var(--accent); color: var(--text); }
+
+  .addbtn {
+    width: 100%;
+    padding: 11px;
+    border: 1px dashed rgba(255,255,255,0.25);
+    border-radius: 10px;
+    background: rgba(255,255,255,0.03);
+    color: var(--text);
+    font-size: 13px;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .addbtn:hover { border-color: var(--accent); background: rgba(124,77,255,0.1); }
+
+  /* bandwidth */
+  .bwrow { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end; }
+  .bwbox {
+    flex: 1; min-width: 160px;
+    border-radius: 10px;
+    padding: 12px 14px;
+    background: rgba(0,0,0,0.25);
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  .bwbox .big { font-size: 22px; font-weight: 700; }
+  .bwbox .lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+  #bwStatus { font-size: 12.5px; margin-top: 10px; line-height: 1.5; }
+  .ok { color: var(--ok); }
+  .warn { color: var(--warn); }
+  .bad { color: var(--bad); }
+
+  .dlbtn {
+    width: 100%;
+    padding: 14px;
+    border: none;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #e53935, #b71c1c);
+    color: white;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.1s, opacity 0.2s;
+  }
+  .dlbtn:not(:disabled):hover { transform: translateY(-1px); }
+  .dlbtn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  details { margin-top: 12px; }
+  summary { font-size: 12.5px; color: var(--muted); cursor: pointer; }
+  pre {
+    margin-top: 10px;
+    background: rgba(0,0,0,0.4);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px;
+    padding: 12px;
+    font-family: Consolas, monospace;
+    font-size: 11.5px;
+    line-height: 1.5;
+    overflow-x: auto;
+    max-height: 320px;
+    color: #c8cdea;
+  }
+  .note {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.6;
+    border-left: 3px solid rgba(124,77,255,0.5);
+    padding-left: 10px;
+    margin-top: 12px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Multi-Live Studio — YouTube</h1>
+  <a class="back" href="index.html">← Kembali ke Visualizer</a>
+</header>
+
+<section>
+  <h2>1 · Persiapan (sekali saja)</h2>
+  <div class="step"><div class="n">1</div><div>
+    Install <b>ffmpeg</b> — buka Command Prompt, jalankan:
+    <code class="inline" id="wingetCmd">winget install Gyan.FFmpeg</code>
+    <button class="copybtn" data-copy="winget install Gyan.FFmpeg">salin</button>
+    lalu tutup &amp; buka lagi Command Prompt-nya.
+  </div></div>
+  <div class="step"><div class="n">2</div><div>
+    Render video visualizer di <a href="index.html" style="color:#b39dff;">halaman utama</a>.
+    Untuk live 24/7, resolusi <b>1280×720 / 30fps</b> sudah sangat layak dan hemat bandwidth.
+  </div></div>
+  <div class="step"><div class="n">3</div><div>
+    Ambil <b>stream key</b> tiap channel: YouTube Studio → <b>Go Live</b> → tab <b>Stream</b> → salin "Stream key".
+    Satu channel = satu key. Jadwalkan/aktifkan siaran di YouTube Studio dulu supaya key-nya siap menerima.
+  </div></div>
+</section>
+
+<section>
+  <h2>2 · Daftar Siaran</h2>
+  <p class="sub">Satu baris = satu channel YouTube yang siaran bersamaan. Data tersimpan <b>hanya di browser ini</b> (localStorage) — stream key tidak dikirim ke mana pun.</p>
+  <div id="streams"></div>
+  <button class="addbtn" id="addStream">＋ Tambah siaran</button>
+</section>
+
+<section>
+  <h2>3 · Cek Bandwidth Upload</h2>
+  <p class="sub">Tiap siaran memakan upload sebesar bitrate videonya (export 720p ≈ 4–5 Mbps, 1080p ≈ 10 Mbps). Isi kecepatan upload internetmu (tes di speedtest.net) untuk melihat aman/tidaknya.</p>
+  <div class="bwrow">
+    <div class="bwbox">
+      <div class="lbl">Jumlah siaran</div>
+      <div class="big" id="bwCount">0</div>
+    </div>
+    <div class="bwbox">
+      <div class="lbl">Perkiraan kebutuhan</div>
+      <div class="big" id="bwNeed">0 Mbps</div>
+    </div>
+    <div class="bwbox">
+      <div class="lbl">Bitrate per video (Mbps)</div>
+      <input id="bwPer" type="number" min="1" max="60" value="5" style="width:100%; padding:6px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.06); color:var(--text); font-size:16px;">
+    </div>
+    <div class="bwbox">
+      <div class="lbl">Upload internetmu (Mbps)</div>
+      <input id="bwUp" type="number" min="0" max="1000" placeholder="mis. 30" style="width:100%; padding:6px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.06); color:var(--text); font-size:16px;">
+    </div>
+  </div>
+  <div id="bwStatus"></div>
+</section>
+
+<section>
+  <h2>4 · Download Script Siaran</h2>
+  <p class="sub">Hasilnya satu file <code class="inline">start-live.bat</code>. <b>Letakkan di folder yang sama dengan file video</b>, lalu klik dua kali — semua siaran menyala di jendela terpisah, otomatis menyambung ulang kalau koneksi putus, dan video di-loop tanpa henti. Tutup jendelanya untuk menghentikan siaran.</p>
+  <button class="dlbtn" id="dlBat" disabled>⬇ Download start-live.bat</button>
+  <details>
+    <summary>Lihat isi script</summary>
+    <pre id="batPreview">(daftar siaran masih kosong)</pre>
+  </details>
+  <div class="note">
+    Video hasil export aplikasi ini sudah H.264 + AAC, jadi script memakai <code class="inline">-c copy</code> —
+    tidak ada encoding ulang, CPU nyaris tidak terpakai, laptop biasa kuat menjalankan beberapa siaran sekaligus.
+    Yang membatasi hanya kecepatan upload internet. PC harus tetap menyala selama siaran;
+    kalau nanti mau 24/7 tanpa PC, script yang sama tinggal dijalankan di VPS.
+  </div>
+</section>
+
+</div>
+
+<input type="file" id="filePick" accept="video/mp4,video/*" style="display:none">
+
+<script>
+(() => {
+  const KEY = 'mv-live-v1';
+  const streamsEl = document.getElementById('streams');
+  const addBtn = document.getElementById('addStream');
+  const dlBat = document.getElementById('dlBat');
+  const batPreview = document.getElementById('batPreview');
+  const bwCount = document.getElementById('bwCount');
+  const bwNeed = document.getElementById('bwNeed');
+  const bwPer = document.getElementById('bwPer');
+  const bwUp = document.getElementById('bwUp');
+  const bwStatus = document.getElementById('bwStatus');
+  const filePick = document.getElementById('filePick');
+
+  // {name, video, key} — key disimpan hanya di localStorage browser ini
+  let streams = [];
+  let pickTarget = -1;
+
+  function load() {
+    try {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      if (s && Array.isArray(s.streams)) streams = s.streams;
+      if (s && s.bwPer) bwPer.value = s.bwPer;
+      if (s && s.bwUp) bwUp.value = s.bwUp;
+    } catch (e) {}
+    if (!streams.length) streams = [{ name: '', video: '', key: '' }];
+  }
+  function save() {
+    try {
+      localStorage.setItem(KEY, JSON.stringify({ streams, bwPer: bwPer.value, bwUp: bwUp.value }));
+    } catch (e) {}
+  }
+
+  function render() {
+    streamsEl.innerHTML = '';
+    streams.forEach((s, i) => {
+      const box = document.createElement('div');
+      box.className = 'stream';
+      box.innerHTML = `
+        <div class="rowline">
+          <div class="fld">
+            <label>Nama channel</label>
+            <input data-f="name" data-i="${i}" placeholder="mis. Lofi Santai 24/7">
+          </div>
+          <div class="fld">
+            <label>File video (nama file, sefolder dgn .bat)</label>
+            <input data-f="video" data-i="${i}" placeholder="mis. lofi-1jam.mp4">
+          </div>
+        </div>
+        <div class="rowline">
+          <div class="fld" style="flex:2;">
+            <label>Stream key YouTube</label>
+            <div class="keywrap">
+              <input data-f="key" data-i="${i}" type="password" placeholder="xxxx-xxxx-xxxx-xxxx-xxxx" autocomplete="off">
+              <button class="eye" data-eye="${i}" title="lihat/sembunyikan">👁</button>
+            </div>
+          </div>
+        </div>
+        <div class="foot">
+          <button class="pickfile" data-pick="${i}">📂 ambil nama file dari video…</button>
+          <button class="del" data-del="${i}">hapus siaran ini</button>
+        </div>`;
+      streamsEl.appendChild(box);
+      box.querySelector('[data-f="name"]').value = s.name;
+      box.querySelector('[data-f="video"]').value = s.video;
+      box.querySelector('[data-f="key"]').value = s.key;
+    });
+    refresh();
+  }
+
+  streamsEl.addEventListener('input', e => {
+    const f = e.target.dataset.f;
+    if (!f) return;
+    streams[+e.target.dataset.i][f] = e.target.value.trim();
+    refresh();
+  });
+  streamsEl.addEventListener('click', e => {
+    if (e.target.dataset.eye != null) {
+      const inp = e.target.parentElement.querySelector('input');
+      inp.type = inp.type === 'password' ? 'text' : 'password';
+    } else if (e.target.dataset.del != null) {
+      streams.splice(+e.target.dataset.del, 1);
+      if (!streams.length) streams.push({ name: '', video: '', key: '' });
+      render();
+      save();
+    } else if (e.target.dataset.pick != null) {
+      pickTarget = +e.target.dataset.pick;
+      filePick.click();
+    }
+  });
+  filePick.addEventListener('change', () => {
+    const f = filePick.files[0];
+    filePick.value = '';
+    if (!f || pickTarget < 0 || !streams[pickTarget]) return;
+    streams[pickTarget].video = f.name;
+    render();
+    save();
+  });
+  addBtn.addEventListener('click', () => {
+    streams.push({ name: '', video: '', key: '' });
+    render();
+    save();
+  });
+
+  document.addEventListener('click', e => {
+    if (e.target.dataset.copy) {
+      navigator.clipboard.writeText(e.target.dataset.copy).catch(() => {});
+      const t = e.target.textContent;
+      e.target.textContent = '✅';
+      setTimeout(() => { e.target.textContent = t; }, 1200);
+    }
+  });
+
+  function validStreams() {
+    return streams.filter(s => s.video && s.key);
+  }
+
+  // ===== generator start-live.bat =====
+  const sanitizeBat = v => (v || '').replace(/[%^&<>|"]/g, '').trim();
+
+  function buildBat(list) {
+    const L = [];
+    L.push('@echo off');
+    L.push('chcp 65001 >nul');
+    L.push('rem ============================================');
+    L.push('rem  Multi-Live YouTube - dibuat oleh Multi-Live Studio');
+    L.push('rem  Letakkan file ini SEFOLDER dengan file video.');
+    L.push('rem  Klik 2x untuk mulai. Tutup jendela = stop siaran.');
+    L.push('rem ============================================');
+    L.push('where ffmpeg >nul 2>nul');
+    L.push('if errorlevel 1 (');
+    L.push('  echo [X] ffmpeg tidak ditemukan. Install dulu dengan:');
+    L.push('  echo     winget install Gyan.FFmpeg');
+    L.push('  echo lalu buka ulang file ini.');
+    L.push('  pause');
+    L.push('  exit /b 1');
+    L.push(')');
+    L.push('cd /d "%~dp0"');
+    L.push('if not "%~1"=="" goto :stream');
+    L.push('echo Memulai ' + list.length + ' siaran YouTube...');
+    list.forEach((s, i) => {
+      const nm = sanitizeBat(s.name) || ('Siaran ' + (i + 1));
+      L.push('start "LIVE ' + (i + 1) + ' - ' + nm + '" "%~f0" ' + (i + 1));
+    });
+    L.push('echo Semua jendela siaran dibuka. Biarkan berjalan; tutup jendela untuk stop.');
+    L.push('timeout /t 4 >nul');
+    L.push('exit /b 0');
+    L.push('');
+    L.push(':stream');
+    list.forEach((s, i) => {
+      L.push('if "%~1"=="' + (i + 1) + '" (');
+      L.push('  set "NAMA=' + (sanitizeBat(s.name) || 'Siaran ' + (i + 1)) + '"');
+      L.push('  set "VIDEO=' + sanitizeBat(s.video) + '"');
+      L.push('  set "KEY=' + sanitizeBat(s.key) + '"');
+      L.push(')');
+    });
+    L.push('title LIVE %~1 - %NAMA%');
+    L.push('if not exist "%VIDEO%" (');
+    L.push('  echo [X] File "%VIDEO%" tidak ada di folder ini. Pindahkan .bat ke folder video.');
+    L.push('  pause');
+    L.push('  exit /b 1');
+    L.push(')');
+    L.push(':loop');
+    L.push('echo [%date% %time%] Siaran "%NAMA%" dimulai — video di-loop tanpa henti.');
+    L.push('ffmpeg -re -stream_loop -1 -i "%VIDEO%" -c copy -f flv "rtmp://a.rtmp.youtube.com/live2/%KEY%"');
+    L.push('echo.');
+    L.push('echo [!] Siaran terputus. Menyambung ulang dalam 5 detik... (tutup jendela utk berhenti)');
+    L.push('timeout /t 5 /nobreak >nul');
+    L.push('goto :loop');
+    return L.join('\r\n') + '\r\n';
+  }
+
+  function refresh() {
+    save();
+    const ok = validStreams();
+    bwCount.textContent = ok.length;
+    const per = parseFloat(bwPer.value) || 0;
+    const need = ok.length * per;
+    bwNeed.textContent = need + ' Mbps';
+    const up = parseFloat(bwUp.value) || 0;
+    if (!ok.length) {
+      bwStatus.innerHTML = '';
+    } else if (!up) {
+      bwStatus.innerHTML = '<span class="warn">Isi kecepatan uploadmu untuk melihat perkiraan aman/tidaknya.</span>';
+    } else if (need <= up * 0.6) {
+      bwStatus.innerHTML = '<span class="ok">✔ Aman — kebutuhan ' + need + ' Mbps, upload ' + up + ' Mbps (masih ada cadangan).</span>';
+    } else if (need <= up * 0.85) {
+      bwStatus.innerHTML = '<span class="warn">⚠ Mepet — siaran bisa tersendat kalau internet dipakai hal lain. Pertimbangkan bitrate/resolusi lebih rendah.</span>';
+    } else {
+      bwStatus.innerHTML = '<span class="bad">✘ Tidak cukup — kurangi jumlah siaran, atau render ulang video di resolusi/bitrate lebih rendah (720p).</span>';
+    }
+    dlBat.disabled = !ok.length;
+    batPreview.textContent = ok.length
+      ? buildBat(ok).replace(/set "KEY=[^"]*"/g, 'set "KEY=•••••••••• (disembunyikan di preview)"')
+      : '(daftar siaran masih kosong — isi minimal file video + stream key)';
+  }
+  bwPer.addEventListener('input', refresh);
+  bwUp.addEventListener('input', refresh);
+
+  dlBat.addEventListener('click', () => {
+    const ok = validStreams();
+    if (!ok.length) return;
+    const blob = new Blob([buildBat(ok)], { type: 'text/plain' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'start-live.bat';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  });
+
+  load();
+  render();
+})();
+</script>
+</body>
+</html>

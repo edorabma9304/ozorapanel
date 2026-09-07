@@ -1,0 +1,3383 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Music Visualizer — buat video visualizer musik langsung di browser: upload lagu, pilih gaya visual, lalu download MP4 hingga 8K. Gratis, tanpa install.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎵</text></svg>">
+<title>Music Visualizer</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --accent: #7c4dff;
+    --bg: #0a0a12;
+    --panel: rgba(18, 18, 32, 0.94);
+    --text: #eef0ff;
+    --muted: #8a8fa8;
+  }
+
+  html, body {
+    width: 100%; height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    overflow: hidden;
+  }
+
+  /* Latar sudah diburamkan lewat kanvas saat dimuat (lihat bakeBg) — TANPA
+     CSS filter di sini: filter pada layer selebar layar dihitung ulang GPU
+     setiap frame kanvas berubah. */
+  #bgImage {
+    position: fixed; inset: -60px;
+    background-size: cover;
+    background-position: center;
+    transform: scale(1.1);
+    z-index: 0;
+  }
+
+  #bgImage2 {
+    position: fixed; inset: -60px;
+    background-size: cover;
+    background-position: center;
+    opacity: 0;
+    transition: opacity 1s ease;
+    z-index: 0;
+  }
+
+  #bgVideo {
+    position: fixed; inset: -60px;
+    width: calc(100vw + 120px);
+    height: calc(100vh + 120px);
+    object-fit: cover;
+    opacity: 0.5;
+    display: none;
+    z-index: 0;
+  }
+
+  canvas#viz {
+    position: fixed; inset: 0;
+    width: 100vw; height: 100vh;
+    z-index: 1;
+  }
+
+  /* ===== Panel kontrol ===== */
+  #panel {
+    position: fixed;
+    top: 20px; left: 20px;
+    z-index: 10;
+    background: var(--panel);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 16px;
+    padding: 20px;
+    width: 300px;
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+    transition: transform 0.35s ease, opacity 0.35s ease;
+  }
+  #panel.hidden {
+    transform: translateX(-120%);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  #panel h1 {
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    margin-bottom: 16px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  #panel h1::before { content: "🎵"; }
+
+  .field { margin-bottom: 14px; }
+  .field label {
+    display: block;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  .filebtn {
+    display: flex; align-items: center; gap: 10px;
+    width: 100%;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px dashed rgba(255,255,255,0.25);
+    background: rgba(255,255,255,0.04);
+    color: var(--text);
+    font-size: 13px;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  }
+  .filebtn:hover { border-color: var(--accent); background: rgba(124,77,255,0.12); }
+  .filebtn.loaded { border-style: solid; border-color: var(--accent); }
+  input[type="file"] { display: none; }
+
+  .field input[type="text"] {
+    width: 100%;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.05);
+    color: var(--text);
+    font-size: 13px;
+    outline: none;
+  }
+  .field input[type="text"]:focus { border-color: var(--accent); }
+
+  .row { display: flex; gap: 10px; }
+  .row .field { flex: 1; }
+
+  .slider-field input[type="range"] {
+    -webkit-appearance: none;
+    width: 100%; height: 4px;
+    border-radius: 2px;
+    background: rgba(255,255,255,0.15);
+    cursor: pointer;
+    outline: none;
+    margin-top: 6px;
+  }
+  .slider-field input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 13px; height: 13px;
+    border-radius: 50%;
+    background: white;
+  }
+
+  .clearbg {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 11px;
+    cursor: pointer;
+    padding: 0;
+    margin-top: 6px;
+    text-decoration: underline;
+    display: none;
+  }
+  .clearbg.show { display: inline; }
+  .clearbg:hover { color: var(--text); }
+
+  select, input[type="color"] {
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(30,30,50,0.9);
+    color: var(--text);
+    font-size: 13px;
+    cursor: pointer;
+    outline: none;
+  }
+  input[type="color"] { height: 37px; padding: 4px; }
+
+  #playBtn {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--accent), #536dfe);
+    color: white;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 4px;
+    transition: opacity 0.2s, transform 0.1s;
+  }
+  #playBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+  #playBtn:not(:disabled):hover { transform: translateY(-1px); }
+
+  #plList { margin-top: 8px; display: none; max-height: 170px; overflow-y: auto; }
+  #plList.show { display: block; }
+  .plrow {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 8px;
+    border-radius: 8px;
+    font-size: 12px;
+  }
+  .plrow.current { background: rgba(124,77,255,0.18); }
+  .plrow .plname {
+    flex: 1;
+    overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+    cursor: pointer;
+  }
+  .plrow .pldur { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .plrow button {
+    background: none; border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 12px;
+    padding: 2px 4px;
+  }
+  .plrow button:hover { color: var(--text); }
+
+  #chapters {
+    position: fixed; inset: 0;
+    z-index: 20;
+    display: none;
+    align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.6);
+  }
+  #chapters.show { display: flex; }
+  .chbox {
+    background: var(--panel);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 16px;
+    padding: 24px;
+    width: min(480px, 90vw);
+  }
+  .chbox h2 { font-size: 16px; margin-bottom: 8px; }
+  .chbox p { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+  #chText {
+    width: 100%; height: 180px;
+    background: rgba(0,0,0,0.3);
+    color: var(--text);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 10px;
+    padding: 10px;
+    font-size: 12px;
+    font-family: Consolas, monospace;
+    resize: vertical;
+  }
+  .chrow { display: flex; gap: 10px; margin-top: 12px; }
+  .chrow button {
+    flex: 1;
+    padding: 10px;
+    border: none; border-radius: 10px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 13px;
+  }
+  #chCopy { background: linear-gradient(135deg, var(--accent), #536dfe); color: white; }
+  #chClose { background: rgba(255,255,255,0.1); color: var(--text); }
+
+  .divider {
+    border-top: 1px solid rgba(255,255,255,0.08);
+    margin: 16px 0 12px;
+  }
+
+  #dlBtn {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #00c853, #00838f);
+    color: white;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 4px;
+    transition: opacity 0.2s, transform 0.1s;
+  }
+  #dlBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+  #dlBtn:not(:disabled):hover { transform: translateY(-1px); }
+
+  #thumbBtn {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 10px;
+    background: rgba(255,255,255,0.06);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 8px;
+    transition: background 0.2s;
+  }
+  #thumbBtn:hover { background: rgba(255,255,255,0.12); }
+
+  .pbtn {
+    flex: 0 0 auto;
+    padding: 8px 11px;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.15);
+    background: rgba(255,255,255,0.06);
+    color: var(--text);
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .pbtn:hover { background: rgba(255,255,255,0.12); }
+
+  .chk {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px;
+    color: var(--text);
+    margin: 8px 0;
+    cursor: pointer;
+    user-select: none;
+  }
+  .chk input { accent-color: var(--accent); cursor: pointer; }
+
+  #compatNote {
+    position: fixed;
+    left: 50%; bottom: 90px;
+    transform: translateX(-50%);
+    z-index: 30;
+    display: none;
+    align-items: flex-start; gap: 10px;
+    max-width: min(560px, calc(100vw - 32px));
+    background: rgba(45, 33, 10, 0.94);
+    border: 1px solid rgba(255, 190, 60, 0.4);
+    border-radius: 12px;
+    padding: 10px 14px;
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+  #compatNote.show { display: flex; }
+  #compatNote button {
+    background: none; border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 14px;
+    flex-shrink: 0;
+    padding: 0 2px;
+  }
+  #compatNote button:hover { color: var(--text); }
+
+  #recBadge {
+    position: fixed;
+    top: 20px; right: 20px;
+    z-index: 12;
+    display: none;
+    align-items: center; gap: 10px;
+    background: var(--panel);
+    border: 1px solid rgba(255, 60, 60, 0.4);
+    border-radius: 999px;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+  }
+  #recBadge.show { display: flex; }
+  .recdot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: #ff3b3b;
+    animation: blink 1s infinite;
+  }
+  @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+  #recStop {
+    border: none;
+    border-radius: 999px;
+    background: #ff3b3b;
+    color: white;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px 12px;
+    cursor: pointer;
+  }
+
+  #togglePanel {
+    position: fixed;
+    top: 20px; left: 20px;
+    z-index: 11;
+    width: 40px; height: 40px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: var(--panel);
+    color: var(--text);
+    font-size: 18px;
+    cursor: pointer;
+    display: none;
+    align-items: center; justify-content: center;
+  }
+  #togglePanel.show { display: flex; }
+
+  /* ===== Bar bawah ===== */
+  #bottomBar {
+    position: fixed;
+    left: 50%; bottom: 24px;
+    transform: translateX(-50%);
+    z-index: 10;
+    display: none;
+    align-items: center; gap: 14px;
+    background: var(--panel);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 999px;
+    padding: 10px 20px;
+    min-width: 420px; max-width: 80vw;
+  }
+  #bottomBar.show { display: flex; }
+
+  #ppBtn {
+    width: 38px; height: 38px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    border: none;
+    background: linear-gradient(135deg, var(--accent), #536dfe);
+    color: white; font-size: 14px;
+    cursor: pointer;
+  }
+
+  #time, #time2 { font-size: 12px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  #fpsMeter { font-size: 11px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; opacity: 0.8; min-width: 84px; text-align: right; }
+
+  .bbtn {
+    width: 32px; height: 32px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-size: 15px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: color 0.15s, background 0.15s;
+  }
+  .bbtn:hover { color: var(--text); background: rgba(255,255,255,0.08); }
+  .bbtn.active { color: #b39dff; background: rgba(124,77,255,0.22); }
+
+  #seek {
+    flex: 1;
+    -webkit-appearance: none;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255,255,255,0.15);
+    cursor: pointer;
+    outline: none;
+  }
+  #seek::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: white;
+    box-shadow: 0 0 8px rgba(124,77,255,0.8);
+  }
+
+  #volWrap { display: flex; align-items: center; gap: 6px; }
+  #vol {
+    -webkit-appearance: none;
+    width: 70px; height: 4px;
+    border-radius: 2px;
+    background: rgba(255,255,255,0.15);
+    cursor: pointer;
+    outline: none;
+  }
+  #vol::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: white;
+  }
+
+  #hint {
+    position: fixed;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 5;
+    text-align: center;
+    color: var(--muted);
+    font-size: 14px;
+    pointer-events: none;
+  }
+  #hint .big { font-size: 48px; margin-bottom: 12px; }
+
+  /* ===== Mobile ===== */
+  @media (max-width: 640px) {
+    #panel {
+      top: 12px; left: 12px;
+      width: calc(100vw - 24px);
+      max-height: calc(100vh - 24px);
+      padding: 16px;
+    }
+    #togglePanel { top: 12px; left: 12px; }
+    #recBadge { top: 12px; right: 12px; }
+    #bottomBar {
+      min-width: 0;
+      width: calc(100vw - 20px);
+      max-width: none;
+      bottom: 12px;
+      gap: 6px;
+      padding: 8px 12px;
+    }
+    #volWrap, #fpsMeter { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div id="bgImage"></div>
+<div id="bgImage2"></div>
+<video id="bgVideo" muted loop playsinline></video>
+<canvas id="viz"></canvas>
+
+<div id="hint">
+  <div class="big">🎧</div>
+  Upload musik &amp; gambar di panel kiri,<br>lalu tekan <b>Play</b><br>
+  <span style="font-size:12px; opacity:0.75;">Tips: logo, watermark, judul &amp; artis bisa <b>diseret</b> untuk atur posisi,<br>dan <b>scroll</b> di atasnya untuk ubah ukuran</span>
+</div>
+
+<button id="togglePanel" title="Buka pengaturan">⚙️</button>
+
+<div id="panel">
+  <h1>Music Visualizer</h1>
+
+  <div class="row" style="align-items:flex-end;">
+    <div class="field">
+      <label>Preset</label>
+      <select id="presetSel"><option value="">— pilih preset —</option></select>
+    </div>
+    <button class="pbtn" id="presetSave" title="Simpan pengaturan saat ini sebagai preset" style="margin-bottom:14px;">💾</button>
+    <button class="pbtn" id="presetDel" title="Hapus preset terpilih" style="margin-bottom:14px;">🗑</button>
+  </div>
+
+  <div class="field">
+    <label>File Musik — bisa pilih banyak sekaligus</label>
+    <button class="filebtn" id="audioBtn">📂 Pilih file musik…</button>
+    <input type="file" id="audioFile" accept="audio/*,.wav,.mp3,.m4a,.aac,.ogg,.oga,.opus,.flac,.webm" multiple>
+    <div id="plList"></div>
+  </div>
+
+  <div class="field">
+    <label>Gambar (Logo / Cover / Foto)</label>
+    <button class="filebtn" id="imageBtn">🖼️ Pilih gambar…</button>
+    <input type="file" id="imageFile" accept="image/*">
+    <label class="chk" style="margin:8px 0 0;"><input type="checkbox" id="imgChk" checked> Tampilkan gambar di video</label>
+  </div>
+
+  <div class="field">
+    <label>Watermark (logo sudut kanan-atas)</label>
+    <button class="filebtn" id="wmBtn">©️ Pilih logo watermark…</button>
+    <input type="file" id="wmFile" accept="image/*">
+    <label class="chk" style="margin:8px 0 0;"><input type="checkbox" id="wmChk" checked> Tampilkan watermark</label>
+    <div class="slider-field" style="margin-top:6px;">
+      <label style="display:block; font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin-bottom:6px;">Ukuran Watermark</label>
+      <input type="range" id="wmSize" min="30" max="300" value="100" step="1">
+    </div>
+  </div>
+
+  <div class="field">
+    <label>Background — foto / video / beberapa foto (slideshow)</label>
+    <button class="filebtn" id="bgBtn">🎬 Pilih foto/video background…</button>
+    <input type="file" id="bgFile" accept="image/*,video/*" multiple>
+    <button class="clearbg" id="clearBg">✕ Hapus background (pakai blur otomatis)</button>
+  </div>
+
+  <div class="row">
+    <div class="field slider-field">
+      <label>Blur Background</label>
+      <input type="range" id="bgBlur" min="0" max="40" value="0" step="1">
+    </div>
+    <div class="field slider-field">
+      <label>Gelap Background</label>
+      <input type="range" id="bgDim" min="0" max="90" value="30" step="1">
+    </div>
+  </div>
+
+  <div class="field">
+    <label>Judul Lagu</label>
+    <input type="text" id="songTitle" placeholder="Judul lagu">
+  </div>
+  <div class="field">
+    <label>Nama Artis</label>
+    <input type="text" id="artistName" placeholder="Nama artis">
+  </div>
+  <div class="row">
+    <div class="field slider-field">
+      <label>Ukuran Judul</label>
+      <input type="range" id="titleSize" min="50" max="250" value="100" step="1">
+    </div>
+    <div class="field slider-field">
+      <label>Ukuran Artis</label>
+      <input type="range" id="artistSize" min="50" max="250" value="100" step="1">
+    </div>
+  </div>
+  <button class="pbtn" id="posReset" style="width:100%; margin-bottom:14px;" title="Kembalikan logo, watermark, judul, dan artis ke posisi bawaan">↺ Reset posisi elemen (logo/judul/watermark)</button>
+
+  <div class="field">
+    <label>Lirik Sinkron — file .lrc, nama file = nama lagu</label>
+    <button class="filebtn" id="lrcBtn">📝 Pilih file .lrc…</button>
+    <input type="file" id="lrcFile" accept=".lrc,.txt,text/plain" multiple>
+    <label class="chk" style="margin:8px 0 0;"><input type="checkbox" id="lyricsChk" checked> Tampilkan lirik di video</label>
+  </div>
+
+  <div class="row">
+    <div class="field slider-field">
+      <label>Ukuran Visualizer</label>
+      <input type="range" id="vizSize" min="40" max="220" value="100" step="1">
+    </div>
+    <div class="field slider-field">
+      <label>Ukuran Gambar</label>
+      <input type="range" id="imgSize" min="40" max="220" value="100" step="1">
+    </div>
+  </div>
+
+  <div class="field">
+    <label>Gaya Visual</label>
+    <select id="vizStyle">
+      <option value="circular">Circular Bars</option>
+      <option value="ring">Ring Wave</option>
+      <option value="bars">Bottom Bars</option>
+      <option value="mirror">Mirror Bars</option>
+      <option value="wave">Smooth Wave</option>
+      <option value="particles">Particles</option>
+      <option value="fire">Fire Spectrum + Sparks</option>
+    </select>
+  </div>
+
+  <div class="row">
+    <div class="field">
+      <label>Posisi (Api)</label>
+      <select id="firePos">
+        <option value="center">Tengah</option>
+        <option value="bottom">Paling Bawah</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Lebar Garis (Api)</label>
+      <select id="fireLen">
+        <option value="full">Penuh</option>
+        <option value="half" selected>Setengah</option>
+        <option value="quarter">Seperempat</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="field">
+      <label>Warna 1</label>
+      <input type="color" id="vizColor" value="#7c4dff">
+    </div>
+    <div class="field">
+      <label>Warna 2 (Gradasi)</label>
+      <input type="color" id="vizColor2" value="#00e5ff">
+    </div>
+  </div>
+
+  <div class="field">
+    <label>Kualitas Preview — hanya tampilan layar, tidak memengaruhi video</label>
+    <select id="previewQ">
+      <option value="auto" selected>Otomatis — menyesuaikan kemampuan perangkat</option>
+      <option value="tinggi">Tinggi — paling tajam, paling berat</option>
+      <option value="sedang">Sedang</option>
+      <option value="rendah">Rendah — paling ringan</option>
+    </select>
+  </div>
+
+  <button id="playBtn" disabled>▶ Play</button>
+
+  <div class="divider"></div>
+
+  <div class="row">
+    <div class="field">
+      <label>Resolusi Video</label>
+      <select id="resSelect">
+        <optgroup label="YouTube (16:9)">
+          <option value="640x360">360p — 640×360</option>
+          <option value="854x480">480p — 854×480</option>
+          <option value="1280x720">720p HD — 1280×720</option>
+          <option value="1920x1080" selected>1080p Full HD — 1920×1080</option>
+          <option value="2560x1440">1440p QHD — 2560×1440</option>
+          <option value="3840x2160">2160p 4K — 3840×2160</option>
+          <option value="7680x4320">4320p 8K — 7680×4320</option>
+        </optgroup>
+        <optgroup label="Shorts / Reels / TikTok">
+          <option value="1080x1920">Vertical 9:16 — 1080×1920</option>
+        </optgroup>
+        <optgroup label="Lainnya">
+          <option value="1080x1080">Square 1:1 — 1080×1080</option>
+        </optgroup>
+      </select>
+    </div>
+    <div class="field" style="flex:0 0 90px;">
+      <label>FPS</label>
+      <select id="fpsSelect">
+        <option value="24">24</option>
+        <option value="30">30</option>
+        <option value="60" selected>60</option>
+      </select>
+    </div>
+  </div>
+  <div class="row">
+    <div class="field">
+      <label>Potong: Mulai</label>
+      <input type="text" id="trimStart" placeholder="0:00">
+    </div>
+    <div class="field">
+      <label>Potong: Selesai</label>
+      <input type="text" id="trimEnd" placeholder="sampai habis">
+    </div>
+  </div>
+
+  <label class="chk"><input type="checkbox" id="showProg" checked> Progress bar di dalam video</label>
+  <label class="chk"><input type="checkbox" id="normChk" checked> Normalisasi volume antar lagu</label>
+  <label class="chk"><input type="checkbox" id="fadeChk" checked> Fade antar lagu</label>
+  <label class="chk"><input type="checkbox" id="batchChk"> Export tiap lagu jadi file terpisah</label>
+  <label class="chk"><input type="checkbox" id="hqChk" checked> Kualitas otomatis saat download (min. 1080p · 60fps)</label>
+
+  <button id="dlBtn" disabled>⬇ Download Video</button>
+  <button id="thumbBtn">📸 Simpan Thumbnail (PNG)</button>
+  <a id="liveBtn" href="live.html" style="display:block; text-align:center; margin-top:8px; padding:10px; border:1px solid rgba(255,255,255,0.15); border-radius:10px; background:rgba(229,57,53,0.12); color:var(--text); font-size:13px; font-weight:600; text-decoration:none;">📡 Multi-Live Studio (YouTube)</a>
+</div>
+
+<div id="compatNote">
+  <span id="compatMsg"></span>
+  <button id="compatClose" title="Tutup">✕</button>
+</div>
+
+<div id="recBadge">
+  <span class="recdot"></span>
+  <span><span id="recLabel">REC</span> <span id="recTime">0:00</span></span>
+  <button id="recStop">⏹ Stop &amp; Simpan</button>
+</div>
+
+<div id="chapters">
+  <div class="chbox">
+    <h2>✅ Video selesai — Timestamp YouTube</h2>
+    <p>Tempel ke deskripsi video YouTube (otomatis menjadi chapter):</p>
+    <textarea id="chText" readonly></textarea>
+    <div class="chrow">
+      <button id="chCopy">📋 Salin</button>
+      <button id="chClose">Tutup</button>
+    </div>
+  </div>
+</div>
+
+<script id="mp4muxer">
+/**
+ * Minified by jsDelivr using Terser v5.39.0.
+ * Original file: /npm/mp4-muxer@5.2.1/build/mp4-muxer.js
+ *
+ * Do NOT use SRI with dynamically generated files! More information: https://www.jsdelivr.com/using-sri-with-dynamic-files
+ */
+"use strict";var Mp4Muxer=(()=>{var e=Object.defineProperty,t=Object.getOwnPropertyDescriptor,i=Object.getOwnPropertyNames,s=Object.prototype.hasOwnProperty,a=(e,t,i)=>{if(!t.has(e))throw TypeError("Cannot "+i)},r=(e,t,i)=>(a(e,t,"read from private field"),i?i.call(e):t.get(e)),n=(e,t,i)=>{if(t.has(e))throw TypeError("Cannot add the same private member more than once");t instanceof WeakSet?t.add(e):t.set(e,i)},o=(e,t,i,s)=>(a(e,t,"write to private field"),s?s.call(e,i):t.set(e,i),i),h=(e,t,i)=>(a(e,t,"access private method"),i),l={};((t,i)=>{for(var s in i)e(t,s,{get:i[s],enumerable:!0})})(l,{ArrayBufferTarget:()=>Me,FileSystemWritableFileStreamTarget:()=>Oe,Muxer:()=>Rt,StreamTarget:()=>We});var d,f,u,m,p,c,w,g,b=new Uint8Array(8),y=new DataView(b.buffer),k=e=>[(e%256+256)%256],T=e=>(y.setUint16(0,e,!1),[b[0],b[1]]),C=e=>(y.setUint32(0,e,!1),[b[1],b[2],b[3]]),v=e=>(y.setUint32(0,e,!1),[b[0],b[1],b[2],b[3]]),S=e=>(y.setUint32(0,Math.floor(e/2**32),!1),y.setUint32(4,e,!1),[b[0],b[1],b[2],b[3],b[4],b[5],b[6],b[7]]),x=e=>(y.setInt16(0,256*e,!1),[b[0],b[1]]),z=e=>(y.setInt32(0,65536*e,!1),[b[0],b[1],b[2],b[3]]),E=e=>(y.setInt32(0,2**30*e,!1),[b[0],b[1],b[2],b[3]]),A=(e,t=!1)=>{let i=Array(e.length).fill(null).map(((t,i)=>e.charCodeAt(i)));return t&&i.push(0),i},M=e=>e&&e[e.length-1],W=e=>{let t;for(let i of e)(!t||i.presentationTimestamp>t.presentationTimestamp)&&(t=i);return t},O=(e,t,i=!0)=>{let s=e*t;return i?Math.round(s):s},B=e=>{let t=e*(Math.PI/180),i=Math.cos(t),s=Math.sin(t);return[i,s,0,-s,i,0,0,0,1]},U=B(0),D=e=>[z(e[0]),z(e[1]),E(e[2]),z(e[3]),z(e[4]),E(e[5]),z(e[6]),z(e[7]),E(e[8])],j=e=>e?"object"!=typeof e?e:Array.isArray(e)?e.map(j):Object.fromEntries(Object.entries(e).map((([e,t])=>[e,j(t)]))):e,R=e=>e>=0&&e<2**32,I=(e,t,i)=>({type:e,contents:t&&new Uint8Array(t.flat(10)),children:i}),N=(e,t,i,s,a)=>I(e,[k(t),C(i),s??[]],a),V=e=>({type:"mdat",largeSize:e}),F=(e,t,i=!1)=>I("moov",null,[L(t,e),...e.map((e=>$(e,t))),i?me(e):null]),L=(e,t)=>{let i=O(Math.max(0,...t.filter((e=>e.samples.length>0)).map((e=>{const t=W(e.samples);return t.presentationTimestamp+t.duration}))),Bt),s=Math.max(...t.map((e=>e.id)))+1,a=!R(e)||!R(i),r=a?S:v;return N("mvhd",+a,0,[r(e),r(e),v(Bt),r(i),z(1),x(1),Array(10).fill(0),D(U),Array(24).fill(0),v(s)])},$=(e,t)=>I("trak",null,[P(e,t),H(e,t)]),P=(e,t)=>{let i,s=W(e.samples),a=O(s?s.presentationTimestamp+s.duration:0,Bt),r=!R(t)||!R(a),n=r?S:v;return i="video"===e.info.type?"number"==typeof e.info.rotation?B(e.info.rotation):e.info.rotation:U,N("tkhd",+r,3,[n(t),n(t),v(e.id),v(0),n(a),Array(8).fill(0),T(0),T(0),x("audio"===e.info.type?1:0),T(0),D(i),z("video"===e.info.type?e.info.width:0),z("video"===e.info.type?e.info.height:0)])},H=(e,t)=>I("mdia",null,[_(e,t),q("video"===e.info.type?"vide":"soun"),G(e)]),_=(e,t)=>{let i=W(e.samples),s=O(i?i.presentationTimestamp+i.duration:0,e.timescale),a=!R(t)||!R(s),r=a?S:v;return N("mdhd",+a,0,[r(t),r(t),v(e.timescale),r(s),T(21956),T(0)])},q=e=>N("hdlr",0,0,[A("mhlr"),A(e),v(0),v(0),v(0),A("mp4-muxer-hdlr",!0)]),G=e=>I("minf",null,["video"===e.info.type?J():K(),Q(),Z(e)]),J=()=>N("vmhd",0,1,[T(0),T(0),T(0),T(0)]),K=()=>N("smhd",0,0,[T(0),T(0)]),Q=()=>I("dinf",null,[X()]),X=()=>N("dref",0,0,[v(1)],[Y()]),Y=()=>N("url ",0,1),Z=e=>{const t=e.compositionTimeOffsetTable.length>1||e.compositionTimeOffsetTable.some((e=>0!==e.sampleCompositionTimeOffset));return I("stbl",null,[ee(e),oe(e),he(e),le(e),de(e),fe(e),t?ue(e):null])},ee=e=>N("stsd",0,0,[v(1)],["video"===e.info.type?te(Se[e.info.codec],e):ne(ze[e.info.codec],e)]),te=(e,t)=>{return I(e,[Array(6).fill(0),T(1),T(0),T(0),Array(12).fill(0),T(t.info.width),T(t.info.height),v(4718592),v(4718592),v(0),T(1),Array(32).fill(0),T(24),(i=65535,y.setInt16(0,i,!1),[b[0],b[1]])],[xe[t.info.codec](t),t.info.decoderConfig.colorSpace?re(t):null]);var i},ie={bt709:1,bt470bg:5,smpte170m:6},se={bt709:1,smpte170m:6,"iec61966-2-1":13},ae={rgb:0,bt709:1,bt470bg:5,smpte170m:6},re=e=>I("colr",[A("nclx"),T(ie[e.info.decoderConfig.colorSpace.primaries]),T(se[e.info.decoderConfig.colorSpace.transfer]),T(ae[e.info.decoderConfig.colorSpace.matrix]),k((e.info.decoderConfig.colorSpace.fullRange?1:0)<<7)]),ne=(e,t)=>I(e,[Array(6).fill(0),T(1),T(0),T(0),v(0),T(t.info.numberOfChannels),T(16),T(0),T(0),z(t.info.sampleRate)],[Ee[t.info.codec](t)]),oe=e=>N("stts",0,0,[v(e.timeToSampleTable.length),e.timeToSampleTable.map((e=>[v(e.sampleCount),v(e.sampleDelta)]))]),he=e=>{if(e.samples.every((e=>"key"===e.type)))return null;let t=[...e.samples.entries()].filter((([,e])=>"key"===e.type));return N("stss",0,0,[v(t.length),t.map((([e])=>v(e+1)))])},le=e=>N("stsc",0,0,[v(e.compactlyCodedChunkTable.length),e.compactlyCodedChunkTable.map((e=>[v(e.firstChunk),v(e.samplesPerChunk),v(1)]))]),de=e=>N("stsz",0,0,[v(0),v(e.samples.length),e.samples.map((e=>v(e.size)))]),fe=e=>e.finalizedChunks.length>0&&M(e.finalizedChunks).offset>=2**32?N("co64",0,0,[v(e.finalizedChunks.length),e.finalizedChunks.map((e=>S(e.offset)))]):N("stco",0,0,[v(e.finalizedChunks.length),e.finalizedChunks.map((e=>v(e.offset)))]),ue=e=>N("ctts",0,0,[v(e.compositionTimeOffsetTable.length),e.compositionTimeOffsetTable.map((e=>[v(e.sampleCount),v(e.sampleCompositionTimeOffset)]))]),me=e=>I("mvex",null,e.map(pe)),pe=e=>N("trex",0,0,[v(e.id),v(1),v(0),v(0),v(0)]),ce=(e,t)=>I("moof",null,[we(e),...t.map(be)]),we=e=>N("mfhd",0,0,[v(e)]),ge=e=>{let t=0,i=0,s="delta"===e.type;return i|=+s,t|=s?1:2,t<<24|i<<16},be=e=>I("traf",null,[ye(e),ke(e),Te(e)]),ye=e=>{let t=0;t|=8,t|=16,t|=32,t|=131072;let i=e.currentChunk.samples[1]??e.currentChunk.samples[0],s={duration:i.timescaleUnitsToNextSample,size:i.size,flags:ge(i)};return N("tfhd",0,131128,[v(e.id),v(s.duration),v(s.size),v(s.flags)])},ke=e=>N("tfdt",1,0,[S(O(e.currentChunk.startTimestamp,e.timescale))]),Te=e=>{let t=e.currentChunk.samples.map((e=>e.timescaleUnitsToNextSample)),i=e.currentChunk.samples.map((e=>e.size)),s=e.currentChunk.samples.map(ge),a=e.currentChunk.samples.map((t=>O(t.presentationTimestamp-t.decodeTimestamp,e.timescale))),r=new Set(t),n=new Set(i),o=new Set(s),h=new Set(a),l=2===o.size&&s[0]!==s[1],d=r.size>1,f=n.size>1,u=!l&&o.size>1,m=h.size>1||[...h].some((e=>0!==e)),p=0;return p|=1,p|=4*+l,p|=256*+d,p|=512*+f,p|=1024*+u,p|=2048*+m,N("trun",1,p,[v(e.currentChunk.samples.length),v(e.currentChunk.offset-e.currentChunk.moofOffset||0),l?v(s[0]):[],e.currentChunk.samples.map(((e,r)=>{return[d?v(t[r]):[],f?v(i[r]):[],u?v(s[r]):[],m?(n=a[r],y.setInt32(0,n,!1),[b[0],b[1],b[2],b[3]]):[]];var n}))])},Ce=(e,t)=>N("tfra",1,0,[v(e.id),v(63),v(e.finalizedChunks.length),e.finalizedChunks.map((i=>[S(O(i.startTimestamp,e.timescale)),S(i.moofOffset),v(t+1),v(1),v(1)]))]),ve=()=>N("mfro",0,0,[v(0)]),Se={avc:"avc1",hevc:"hvc1",vp9:"vp09",av1:"av01"},xe={avc:e=>e.info.decoderConfig&&I("avcC",[...new Uint8Array(e.info.decoderConfig.description)]),hevc:e=>e.info.decoderConfig&&I("hvcC",[...new Uint8Array(e.info.decoderConfig.description)]),vp9:e=>{if(!e.info.decoderConfig)return null;let t=e.info.decoderConfig;if(!t.colorSpace)throw new Error("'colorSpace' is required in the decoder config for VP9.");let i=t.codec.split("."),s=Number(i[1]),a=Number(i[2]),r=0+(Number(i[3])<<4)+Number(t.colorSpace.fullRange);return N("vpcC",1,0,[k(s),k(a),k(r),k(2),k(2),k(2),T(0)])},av1:()=>I("av1C",[129,0,0,0])},ze={aac:"mp4a",opus:"Opus"},Ee={aac:e=>{let t=new Uint8Array(e.info.decoderConfig.description);return N("esds",0,0,[v(58753152),k(32+t.byteLength),T(1),k(0),v(75530368),k(18+t.byteLength),k(64),k(21),C(0),v(130071),v(130071),v(92307584),k(t.byteLength),...t,v(109084800),k(1),k(2)])},opus:e=>{let t=3840,i=0;const s=e.info.decoderConfig?.description;if(s){if(s.byteLength<18)throw new TypeError("Invalid decoder description provided for Opus; must be at least 18 bytes long.");const e=ArrayBuffer.isView(s)?new DataView(s.buffer,s.byteOffset,s.byteLength):new DataView(s);t=e.getUint16(10,!0),i=e.getInt16(14,!0)}return I("dOps",[k(0),k(e.info.numberOfChannels),T(t),v(e.info.sampleRate),x(i),k(0)])}},Ae=(Symbol("isTarget"),class{}),Me=class extends Ae{constructor(){super(...arguments),this.buffer=null}},We=class extends Ae{constructor(e){if(super(),this.options=e,"object"!=typeof e)throw new TypeError("StreamTarget requires an options object to be passed to its constructor.");if(e.onData){if("function"!=typeof e.onData)throw new TypeError("options.onData, when provided, must be a function.");if(e.onData.length<2)throw new TypeError("options.onData, when provided, must be a function that takes in at least two arguments (data and position). Ignoring the position argument, which specifies the byte offset at which the data is to be written, can lead to broken outputs.")}if(void 0!==e.chunked&&"boolean"!=typeof e.chunked)throw new TypeError("options.chunked, when provided, must be a boolean.");if(void 0!==e.chunkSize&&(!Number.isInteger(e.chunkSize)||e.chunkSize<1024))throw new TypeError("options.chunkSize, when provided, must be an integer and not smaller than 1024.")}},Oe=class extends Ae{constructor(e,t){if(super(),this.stream=e,this.options=t,!(e instanceof FileSystemWritableFileStream))throw new TypeError("FileSystemWritableFileStreamTarget requires a FileSystemWritableFileStream instance.");if(void 0!==t&&"object"!=typeof t)throw new TypeError("FileSystemWritableFileStreamTarget's options, when provided, must be an object.");if(t&&void 0!==t.chunkSize&&(!Number.isInteger(t.chunkSize)||t.chunkSize<=0))throw new TypeError("options.chunkSize, when provided, must be a positive integer")}},Be=class{constructor(){this.pos=0,n(this,d,new Uint8Array(8)),n(this,f,new DataView(r(this,d).buffer)),this.offsets=new WeakMap}seek(e){this.pos=e}writeU32(e){r(this,f).setUint32(0,e,!1),this.write(r(this,d).subarray(0,4))}writeU64(e){r(this,f).setUint32(0,Math.floor(e/2**32),!1),r(this,f).setUint32(4,e,!1),this.write(r(this,d).subarray(0,8))}writeAscii(e){for(let t=0;t<e.length;t++)r(this,f).setUint8(t%8,e.charCodeAt(t)),t%8==7&&this.write(r(this,d));e.length%8!=0&&this.write(r(this,d).subarray(0,e.length%8))}writeBox(e){if(this.offsets.set(e,this.pos),e.contents&&!e.children)this.writeBoxHeader(e,e.size??e.contents.byteLength+8),this.write(e.contents);else{let t=this.pos;if(this.writeBoxHeader(e,0),e.contents&&this.write(e.contents),e.children)for(let t of e.children)t&&this.writeBox(t);let i=this.pos,s=e.size??i-t;this.seek(t),this.writeBoxHeader(e,s),this.seek(i)}}writeBoxHeader(e,t){this.writeU32(e.largeSize?1:t),this.writeAscii(e.type),e.largeSize&&this.writeU64(t)}measureBoxHeader(e){return 8+(e.largeSize?8:0)}patchBox(e){let t=this.pos;this.seek(this.offsets.get(e)),this.writeBox(e),this.seek(t)}measureBox(e){if(e.contents&&!e.children){return this.measureBoxHeader(e)+e.contents.byteLength}{let t=this.measureBoxHeader(e);if(e.contents&&(t+=e.contents.byteLength),e.children)for(let i of e.children)i&&(t+=this.measureBox(i));return t}}};d=new WeakMap,f=new WeakMap;var Ue=class extends Be{constructor(e){super(),n(this,w),n(this,u,void 0),n(this,m,new ArrayBuffer(65536)),n(this,p,new Uint8Array(r(this,m))),n(this,c,0),o(this,u,e)}write(e){h(this,w,g).call(this,this.pos+e.byteLength),r(this,p).set(e,this.pos),this.pos+=e.byteLength,o(this,c,Math.max(r(this,c),this.pos))}finalize(){h(this,w,g).call(this,this.pos),r(this,u).buffer=r(this,m).slice(0,Math.max(r(this,c),this.pos))}};u=new WeakMap,m=new WeakMap,p=new WeakMap,c=new WeakMap,w=new WeakSet,g=function(e){let t=r(this,m).byteLength;for(;t<e;)t*=2;if(t===r(this,m).byteLength)return;let i=new ArrayBuffer(t),s=new Uint8Array(i);s.set(r(this,p),0),o(this,m,i),o(this,p,s)};var De,je,Re,Ie,Ne,Ve,Fe,Le,$e,Pe,He,_e,qe,Ge=class extends Be{constructor(e){super(),n(this,Ve),n(this,Le),n(this,Pe),n(this,_e),n(this,De,void 0),n(this,je,[]),n(this,Re,void 0),n(this,Ie,void 0),n(this,Ne,[]),o(this,De,e),o(this,Re,e.options?.chunked??!1),o(this,Ie,e.options?.chunkSize??16777216)}write(e){r(this,je).push({data:e.slice(),start:this.pos}),this.pos+=e.byteLength}flush(){if(0===r(this,je).length)return;let e=[],t=[...r(this,je)].sort(((e,t)=>e.start-t.start));e.push({start:t[0].start,size:t[0].data.byteLength});for(let i=1;i<t.length;i++){let s=e[e.length-1],a=t[i];a.start<=s.start+s.size?s.size=Math.max(s.size,a.start+a.data.byteLength-s.start):e.push({start:a.start,size:a.data.byteLength})}for(let t of e){t.data=new Uint8Array(t.size);for(let e of r(this,je))t.start<=e.start&&e.start<t.start+t.size&&t.data.set(e.data,e.start-t.start);r(this,Re)?(h(this,Ve,Fe).call(this,t.data,t.start),h(this,_e,qe).call(this)):r(this,De).options.onData?.(t.data,t.start)}r(this,je).length=0}finalize(){r(this,Re)&&h(this,_e,qe).call(this,!0)}};De=new WeakMap,je=new WeakMap,Re=new WeakMap,Ie=new WeakMap,Ne=new WeakMap,Ve=new WeakSet,Fe=function(e,t){let i=r(this,Ne).findIndex((e=>e.start<=t&&t<e.start+r(this,Ie)));-1===i&&(i=h(this,Pe,He).call(this,t));let s=r(this,Ne)[i],a=t-s.start,n=e.subarray(0,Math.min(r(this,Ie)-a,e.byteLength));s.data.set(n,a);let o={start:a,end:a+n.byteLength};if(h(this,Le,$e).call(this,s,o),0===s.written[0].start&&s.written[0].end===r(this,Ie)&&(s.shouldFlush=!0),r(this,Ne).length>2){for(let e=0;e<r(this,Ne).length-1;e++)r(this,Ne)[e].shouldFlush=!0;h(this,_e,qe).call(this)}n.byteLength<e.byteLength&&h(this,Ve,Fe).call(this,e.subarray(n.byteLength),t+n.byteLength)},Le=new WeakSet,$e=function(e,t){let i=0,s=e.written.length-1,a=-1;for(;i<=s;){let r=Math.floor(i+(s-i+1)/2);e.written[r].start<=t.start?(i=r+1,a=r):s=r-1}for(e.written.splice(a+1,0,t),(-1===a||e.written[a].end<t.start)&&a++;a<e.written.length-1&&e.written[a].end>=e.written[a+1].start;)e.written[a].end=Math.max(e.written[a].end,e.written[a+1].end),e.written.splice(a+1,1)},Pe=new WeakSet,He=function(e){let t={start:Math.floor(e/r(this,Ie))*r(this,Ie),data:new Uint8Array(r(this,Ie)),written:[],shouldFlush:!1};return r(this,Ne).push(t),r(this,Ne).sort(((e,t)=>e.start-t.start)),r(this,Ne).indexOf(t)},_e=new WeakSet,qe=function(e=!1){for(let t=0;t<r(this,Ne).length;t++){let i=r(this,Ne)[t];if(i.shouldFlush||e){for(let e of i.written)r(this,De).options.onData?.(i.data.subarray(e.start,e.end),i.start+e.start);r(this,Ne).splice(t--,1)}}};var Je,Ke,Qe,Xe,Ye,Ze,et,tt,it,st,at,rt,nt,ot,ht,lt,dt,ft,ut,mt,pt,ct,wt,gt,bt,yt,kt,Tt,Ct,vt,St,xt,zt,Et,At,Mt,Wt,Ot=class extends Ge{constructor(e){super(new We({onData:(t,i)=>e.stream.write({type:"write",data:t,position:i}),chunked:!0,chunkSize:e.options?.chunkSize}))}},Bt=1e3,Ut=["avc","hevc","vp9","av1"],Dt=["aac","opus"],jt=["strict","offset","cross-track-offset"],Rt=class{constructor(e){if(n(this,nt),n(this,ht),n(this,dt),n(this,ut),n(this,pt),n(this,wt),n(this,bt),n(this,kt),n(this,Ct),n(this,St),n(this,zt),n(this,At),n(this,Je,void 0),n(this,Ke,void 0),n(this,Qe,void 0),n(this,Xe,void 0),n(this,Ye,null),n(this,Ze,null),n(this,et,Math.floor(Date.now()/1e3)+2082844800),n(this,tt,[]),n(this,it,1),n(this,st,[]),n(this,at,[]),n(this,rt,!1),h(this,nt,ot).call(this,e),e.video=j(e.video),e.audio=j(e.audio),e.fastStart=j(e.fastStart),this.target=e.target,o(this,Je,{firstTimestampBehavior:"strict",...e}),e.target instanceof Me)o(this,Ke,new Ue(e.target));else if(e.target instanceof We)o(this,Ke,new Ge(e.target));else{if(!(e.target instanceof Oe))throw new Error(`Invalid target: ${e.target}`);o(this,Ke,new Ot(e.target))}h(this,ut,mt).call(this),h(this,ht,lt).call(this)}addVideoChunk(e,t,i,s){if(!(e instanceof EncodedVideoChunk))throw new TypeError("addVideoChunk's first argument (sample) must be of type EncodedVideoChunk.");if(t&&"object"!=typeof t)throw new TypeError("addVideoChunk's second argument (meta), when provided, must be an object.");if(void 0!==i&&(!Number.isFinite(i)||i<0))throw new TypeError("addVideoChunk's third argument (timestamp), when provided, must be a non-negative real number.");if(void 0!==s&&!Number.isFinite(s))throw new TypeError("addVideoChunk's fourth argument (compositionTimeOffset), when provided, must be a real number.");let a=new Uint8Array(e.byteLength);e.copyTo(a),this.addVideoChunkRaw(a,e.type,i??e.timestamp,e.duration,t,s)}addVideoChunkRaw(e,t,i,s,a,n){if(!(e instanceof Uint8Array))throw new TypeError("addVideoChunkRaw's first argument (data) must be an instance of Uint8Array.");if("key"!==t&&"delta"!==t)throw new TypeError("addVideoChunkRaw's second argument (type) must be either 'key' or 'delta'.");if(!Number.isFinite(i)||i<0)throw new TypeError("addVideoChunkRaw's third argument (timestamp) must be a non-negative real number.");if(!Number.isFinite(s)||s<0)throw new TypeError("addVideoChunkRaw's fourth argument (duration) must be a non-negative real number.");if(a&&"object"!=typeof a)throw new TypeError("addVideoChunkRaw's fifth argument (meta), when provided, must be an object.");if(void 0!==n&&!Number.isFinite(n))throw new TypeError("addVideoChunkRaw's sixth argument (compositionTimeOffset), when provided, must be a real number.");if(h(this,At,Mt).call(this),!r(this,Je).video)throw new Error("No video track declared.");if("object"==typeof r(this,Je).fastStart&&r(this,Ye).samples.length===r(this,Je).fastStart.expectedVideoChunks)throw new Error(`Cannot add more video chunks than specified in 'fastStart' (${r(this,Je).fastStart.expectedVideoChunks}).`);let o=h(this,wt,gt).call(this,r(this,Ye),e,t,i,s,a,n);if("fragmented"===r(this,Je).fastStart&&r(this,Ze)){for(;r(this,at).length>0&&r(this,at)[0].decodeTimestamp<=o.decodeTimestamp;){let e=r(this,at).shift();h(this,bt,yt).call(this,r(this,Ze),e)}o.decodeTimestamp<=r(this,Ze).lastDecodeTimestamp?h(this,bt,yt).call(this,r(this,Ye),o):r(this,st).push(o)}else h(this,bt,yt).call(this,r(this,Ye),o)}addAudioChunk(e,t,i){if(!(e instanceof EncodedAudioChunk))throw new TypeError("addAudioChunk's first argument (sample) must be of type EncodedAudioChunk.");if(t&&"object"!=typeof t)throw new TypeError("addAudioChunk's second argument (meta), when provided, must be an object.");if(void 0!==i&&(!Number.isFinite(i)||i<0))throw new TypeError("addAudioChunk's third argument (timestamp), when provided, must be a non-negative real number.");let s=new Uint8Array(e.byteLength);e.copyTo(s),this.addAudioChunkRaw(s,e.type,i??e.timestamp,e.duration,t)}addAudioChunkRaw(e,t,i,s,a){if(!(e instanceof Uint8Array))throw new TypeError("addAudioChunkRaw's first argument (data) must be an instance of Uint8Array.");if("key"!==t&&"delta"!==t)throw new TypeError("addAudioChunkRaw's second argument (type) must be either 'key' or 'delta'.");if(!Number.isFinite(i)||i<0)throw new TypeError("addAudioChunkRaw's third argument (timestamp) must be a non-negative real number.");if(!Number.isFinite(s)||s<0)throw new TypeError("addAudioChunkRaw's fourth argument (duration) must be a non-negative real number.");if(a&&"object"!=typeof a)throw new TypeError("addAudioChunkRaw's fifth argument (meta), when provided, must be an object.");if(h(this,At,Mt).call(this),!r(this,Je).audio)throw new Error("No audio track declared.");if("object"==typeof r(this,Je).fastStart&&r(this,Ze).samples.length===r(this,Je).fastStart.expectedAudioChunks)throw new Error(`Cannot add more audio chunks than specified in 'fastStart' (${r(this,Je).fastStart.expectedAudioChunks}).`);let n=h(this,wt,gt).call(this,r(this,Ze),e,t,i,s,a);if("fragmented"===r(this,Je).fastStart&&r(this,Ye)){for(;r(this,st).length>0&&r(this,st)[0].decodeTimestamp<=n.decodeTimestamp;){let e=r(this,st).shift();h(this,bt,yt).call(this,r(this,Ye),e)}n.decodeTimestamp<=r(this,Ye).lastDecodeTimestamp?h(this,bt,yt).call(this,r(this,Ze),n):r(this,at).push(n)}else h(this,bt,yt).call(this,r(this,Ze),n)}finalize(){if(r(this,rt))throw new Error("Cannot finalize a muxer more than once.");if("fragmented"===r(this,Je).fastStart){for(let e of r(this,st))h(this,bt,yt).call(this,r(this,Ye),e);for(let e of r(this,at))h(this,bt,yt).call(this,r(this,Ze),e);h(this,St,xt).call(this,!1)}else r(this,Ye)&&h(this,Ct,vt).call(this,r(this,Ye)),r(this,Ze)&&h(this,Ct,vt).call(this,r(this,Ze));let e=[r(this,Ye),r(this,Ze)].filter(Boolean);if("in-memory"===r(this,Je).fastStart){let t;for(let i=0;i<2;i++){let i=F(e,r(this,et)),s=r(this,Ke).measureBox(i);t=r(this,Ke).measureBox(r(this,Xe));let a=r(this,Ke).pos+s+t;for(let e of r(this,tt)){e.offset=a;for(let{data:i}of e.samples)a+=i.byteLength,t+=i.byteLength}if(a<2**32)break;t>=2**32&&(r(this,Xe).largeSize=!0)}let i=F(e,r(this,et));r(this,Ke).writeBox(i),r(this,Xe).size=t,r(this,Ke).writeBox(r(this,Xe));for(let e of r(this,tt))for(let t of e.samples)r(this,Ke).write(t.data),t.data=null}else if("fragmented"===r(this,Je).fastStart){let t=r(this,Ke).pos,i=(e=>I("mfra",null,[...e.map(Ce),ve()]))(e);r(this,Ke).writeBox(i);let s=r(this,Ke).pos-t;r(this,Ke).seek(r(this,Ke).pos-4),r(this,Ke).writeU32(s)}else{let t=r(this,Ke).offsets.get(r(this,Xe)),i=r(this,Ke).pos-t;r(this,Xe).size=i,r(this,Xe).largeSize=i>=2**32,r(this,Ke).patchBox(r(this,Xe));let s=F(e,r(this,et));if("object"==typeof r(this,Je).fastStart){r(this,Ke).seek(r(this,Qe)),r(this,Ke).writeBox(s);let e=t-r(this,Ke).pos;r(this,Ke).writeBox({type:"free",size:e})}else r(this,Ke).writeBox(s)}h(this,zt,Et).call(this),r(this,Ke).finalize(),o(this,rt,!0)}};return Je=new WeakMap,Ke=new WeakMap,Qe=new WeakMap,Xe=new WeakMap,Ye=new WeakMap,Ze=new WeakMap,et=new WeakMap,tt=new WeakMap,it=new WeakMap,st=new WeakMap,at=new WeakMap,rt=new WeakMap,nt=new WeakSet,ot=function(e){if("object"!=typeof e)throw new TypeError("The muxer requires an options object to be passed to its constructor.");if(!(e.target instanceof Ae))throw new TypeError("The target must be provided and an instance of Target.");if(e.video){if(!Ut.includes(e.video.codec))throw new TypeError(`Unsupported video codec: ${e.video.codec}`);if(!Number.isInteger(e.video.width)||e.video.width<=0)throw new TypeError(`Invalid video width: ${e.video.width}. Must be a positive integer.`);if(!Number.isInteger(e.video.height)||e.video.height<=0)throw new TypeError(`Invalid video height: ${e.video.height}. Must be a positive integer.`);const t=e.video.rotation;if("number"==typeof t&&![0,90,180,270].includes(t))throw new TypeError(`Invalid video rotation: ${t}. Has to be 0, 90, 180 or 270.`);if(Array.isArray(t)&&(9!==t.length||t.some((e=>"number"!=typeof e))))throw new TypeError(`Invalid video transformation matrix: ${t.join()}`);if(void 0!==e.video.frameRate&&(!Number.isInteger(e.video.frameRate)||e.video.frameRate<=0))throw new TypeError(`Invalid video frame rate: ${e.video.frameRate}. Must be a positive integer.`)}if(e.audio){if(!Dt.includes(e.audio.codec))throw new TypeError(`Unsupported audio codec: ${e.audio.codec}`);if(!Number.isInteger(e.audio.numberOfChannels)||e.audio.numberOfChannels<=0)throw new TypeError(`Invalid number of audio channels: ${e.audio.numberOfChannels}. Must be a positive integer.`);if(!Number.isInteger(e.audio.sampleRate)||e.audio.sampleRate<=0)throw new TypeError(`Invalid audio sample rate: ${e.audio.sampleRate}. Must be a positive integer.`)}if(e.firstTimestampBehavior&&!jt.includes(e.firstTimestampBehavior))throw new TypeError(`Invalid first timestamp behavior: ${e.firstTimestampBehavior}`);if("object"==typeof e.fastStart){if(e.video){if(void 0===e.fastStart.expectedVideoChunks)throw new TypeError("'fastStart' is an object but is missing property 'expectedVideoChunks'.");if(!Number.isInteger(e.fastStart.expectedVideoChunks)||e.fastStart.expectedVideoChunks<0)throw new TypeError("'expectedVideoChunks' must be a non-negative integer.")}if(e.audio){if(void 0===e.fastStart.expectedAudioChunks)throw new TypeError("'fastStart' is an object but is missing property 'expectedAudioChunks'.");if(!Number.isInteger(e.fastStart.expectedAudioChunks)||e.fastStart.expectedAudioChunks<0)throw new TypeError("'expectedAudioChunks' must be a non-negative integer.")}}else if(![!1,"in-memory","fragmented"].includes(e.fastStart))throw new TypeError("'fastStart' option must be false, 'in-memory', 'fragmented' or an object.");if(void 0!==e.minFragmentDuration&&(!Number.isFinite(e.minFragmentDuration)||e.minFragmentDuration<0))throw new TypeError("'minFragmentDuration' must be a non-negative number.")},ht=new WeakSet,lt=function(){var e;if(r(this,Ke).writeBox((e={holdsAvc:"avc"===r(this,Je).video?.codec,fragmented:"fragmented"===r(this,Je).fastStart}).fragmented?I("ftyp",[A("iso5"),v(512),A("iso5"),A("iso6"),A("mp41")]):I("ftyp",[A("isom"),v(512),A("isom"),e.holdsAvc?A("avc1"):[],A("mp41")])),o(this,Qe,r(this,Ke).pos),"in-memory"===r(this,Je).fastStart)o(this,Xe,V(!1));else if("fragmented"===r(this,Je).fastStart);else{if("object"==typeof r(this,Je).fastStart){let e=h(this,dt,ft).call(this);r(this,Ke).seek(r(this,Ke).pos+e)}o(this,Xe,V(!0)),r(this,Ke).writeBox(r(this,Xe))}h(this,zt,Et).call(this)},dt=new WeakSet,ft=function(){if("object"!=typeof r(this,Je).fastStart)return;let e=0,t=[r(this,Je).fastStart.expectedVideoChunks,r(this,Je).fastStart.expectedAudioChunks];for(let i of t)i&&(e+=8*Math.ceil(2/3*i),e+=4*i,e+=12*Math.ceil(2/3*i),e+=4*i,e+=8*i);return e+=4096,e},ut=new WeakSet,mt=function(){if(r(this,Je).video&&o(this,Ye,{id:1,info:{type:"video",codec:r(this,Je).video.codec,width:r(this,Je).video.width,height:r(this,Je).video.height,rotation:r(this,Je).video.rotation??0,decoderConfig:null},timescale:r(this,Je).video.frameRate??57600,samples:[],finalizedChunks:[],currentChunk:null,firstDecodeTimestamp:void 0,lastDecodeTimestamp:-1,timeToSampleTable:[],compositionTimeOffsetTable:[],lastTimescaleUnits:null,lastSample:null,compactlyCodedChunkTable:[]}),r(this,Je).audio&&(o(this,Ze,{id:r(this,Je).video?2:1,info:{type:"audio",codec:r(this,Je).audio.codec,numberOfChannels:r(this,Je).audio.numberOfChannels,sampleRate:r(this,Je).audio.sampleRate,decoderConfig:null},timescale:r(this,Je).audio.sampleRate,samples:[],finalizedChunks:[],currentChunk:null,firstDecodeTimestamp:void 0,lastDecodeTimestamp:-1,timeToSampleTable:[],compositionTimeOffsetTable:[],lastTimescaleUnits:null,lastSample:null,compactlyCodedChunkTable:[]}),"aac"===r(this,Je).audio.codec)){let e=h(this,pt,ct).call(this,2,r(this,Je).audio.sampleRate,r(this,Je).audio.numberOfChannels);r(this,Ze).info.decoderConfig={codec:r(this,Je).audio.codec,description:e,numberOfChannels:r(this,Je).audio.numberOfChannels,sampleRate:r(this,Je).audio.sampleRate}}},pt=new WeakSet,ct=function(e,t,i){let s=[96e3,88200,64e3,48e3,44100,32e3,24e3,22050,16e3,12e3,11025,8e3,7350].indexOf(t),a=i,r="";r+=e.toString(2).padStart(5,"0"),r+=s.toString(2).padStart(4,"0"),15===s&&(r+=t.toString(2).padStart(24,"0")),r+=a.toString(2).padStart(4,"0");let n=8*Math.ceil(r.length/8);r=r.padEnd(n,"0");let o=new Uint8Array(r.length/8);for(let e=0;e<r.length;e+=8)o[e/8]=parseInt(r.slice(e,e+8),2);return o},wt=new WeakSet,gt=function(e,t,i,s,a,r,n){let o=s/1e6,l=(s-(n??0))/1e6,d=a/1e6,f=h(this,kt,Tt).call(this,o,l,e);return o=f.presentationTimestamp,l=f.decodeTimestamp,r?.decoderConfig&&(null===e.info.decoderConfig?e.info.decoderConfig=r.decoderConfig:Object.assign(e.info.decoderConfig,r.decoderConfig)),{presentationTimestamp:o,decodeTimestamp:l,duration:d,data:t,size:t.byteLength,type:i,timescaleUnitsToNextSample:O(d,e.timescale)}},bt=new WeakSet,yt=function(e,t){"fragmented"!==r(this,Je).fastStart&&e.samples.push(t);const i=O(t.presentationTimestamp-t.decodeTimestamp,e.timescale);if(null!==e.lastTimescaleUnits){let s=O(t.decodeTimestamp,e.timescale,!1),a=Math.round(s-e.lastTimescaleUnits);if(e.lastTimescaleUnits+=a,e.lastSample.timescaleUnitsToNextSample=a,"fragmented"!==r(this,Je).fastStart){let t=M(e.timeToSampleTable);1===t.sampleCount?(t.sampleDelta=a,t.sampleCount++):t.sampleDelta===a?t.sampleCount++:(t.sampleCount--,e.timeToSampleTable.push({sampleCount:2,sampleDelta:a}));const s=M(e.compositionTimeOffsetTable);s.sampleCompositionTimeOffset===i?s.sampleCount++:e.compositionTimeOffsetTable.push({sampleCount:1,sampleCompositionTimeOffset:i})}}else e.lastTimescaleUnits=0,"fragmented"!==r(this,Je).fastStart&&(e.timeToSampleTable.push({sampleCount:1,sampleDelta:O(t.duration,e.timescale)}),e.compositionTimeOffsetTable.push({sampleCount:1,sampleCompositionTimeOffset:i}));e.lastSample=t;let s=!1;if(e.currentChunk){let i=t.presentationTimestamp-e.currentChunk.startTimestamp;if("fragmented"===r(this,Je).fastStart){let a=r(this,Ye)??r(this,Ze);const n=r(this,Je).minFragmentDuration??1;e===a&&"key"===t.type&&i>=n&&(s=!0,h(this,St,xt).call(this))}else s=i>=.5}else s=!0;s&&(e.currentChunk&&h(this,Ct,vt).call(this,e),e.currentChunk={startTimestamp:t.presentationTimestamp,samples:[]}),e.currentChunk.samples.push(t)},kt=new WeakSet,Tt=function(e,t,i){const s="strict"===r(this,Je).firstTimestampBehavior,a=-1===i.lastDecodeTimestamp;if(s&&a&&0!==t)throw new Error(`The first chunk for your media track must have a timestamp of 0 (received DTS=${t}).Non-zero first timestamps are often caused by directly piping frames or audio data from a MediaStreamTrack into the encoder. Their timestamps are typically relative to the age of thedocument, which is probably what you want.\n\nIf you want to offset all timestamps of a track such that the first one is zero, set firstTimestampBehavior: 'offset' in the options.\n`);if("offset"===r(this,Je).firstTimestampBehavior||"cross-track-offset"===r(this,Je).firstTimestampBehavior){let s;void 0===i.firstDecodeTimestamp&&(i.firstDecodeTimestamp=t),s="offset"===r(this,Je).firstTimestampBehavior?i.firstDecodeTimestamp:Math.min(r(this,Ye)?.firstDecodeTimestamp??1/0,r(this,Ze)?.firstDecodeTimestamp??1/0),t-=s,e-=s}if(t<i.lastDecodeTimestamp)throw new Error(`Timestamps must be monotonically increasing (DTS went from ${1e6*i.lastDecodeTimestamp} to ${1e6*t}).`);return i.lastDecodeTimestamp=t,{presentationTimestamp:e,decodeTimestamp:t}},Ct=new WeakSet,vt=function(e){if("fragmented"===r(this,Je).fastStart)throw new Error("Can't finalize individual chunks if 'fastStart' is set to 'fragmented'.");if(e.currentChunk)if(e.finalizedChunks.push(e.currentChunk),r(this,tt).push(e.currentChunk),0!==e.compactlyCodedChunkTable.length&&M(e.compactlyCodedChunkTable).samplesPerChunk===e.currentChunk.samples.length||e.compactlyCodedChunkTable.push({firstChunk:e.finalizedChunks.length,samplesPerChunk:e.currentChunk.samples.length}),"in-memory"!==r(this,Je).fastStart){e.currentChunk.offset=r(this,Ke).pos;for(let t of e.currentChunk.samples)r(this,Ke).write(t.data),t.data=null;h(this,zt,Et).call(this)}else e.currentChunk.offset=0},St=new WeakSet,xt=function(e=!0){if("fragmented"!==r(this,Je).fastStart)throw new Error("Can't finalize a fragment unless 'fastStart' is set to 'fragmented'.");let t=[r(this,Ye),r(this,Ze)].filter((e=>e&&e.currentChunk));if(0===t.length)return;let i=(s=this,a=it,{set _(e){o(s,a,e,n)},get _(){return r(s,a,l)}})._++;var s,a,n,l;if(1===i){let e=F(t,r(this,et),!0);r(this,Ke).writeBox(e)}let d=r(this,Ke).pos,f=ce(i,t);r(this,Ke).writeBox(f);{let e=V(!1),i=0;for(let e of t)for(let t of e.currentChunk.samples)i+=t.size;let s=r(this,Ke).measureBox(e)+i;s>=2**32&&(e.largeSize=!0,s=r(this,Ke).measureBox(e)+i),e.size=s,r(this,Ke).writeBox(e)}for(let e of t){e.currentChunk.offset=r(this,Ke).pos,e.currentChunk.moofOffset=d;for(let t of e.currentChunk.samples)r(this,Ke).write(t.data),t.data=null}let u=r(this,Ke).pos;r(this,Ke).seek(r(this,Ke).offsets.get(f));let m=ce(i,t);r(this,Ke).writeBox(m),r(this,Ke).seek(u);for(let e of t)e.finalizedChunks.push(e.currentChunk),r(this,tt).push(e.currentChunk),e.currentChunk=null;e&&h(this,zt,Et).call(this)},zt=new WeakSet,Et=function(){r(this,Ke)instanceof Ge&&r(this,Ke).flush()},At=new WeakSet,Mt=function(){if(r(this,rt))throw new Error("Cannot add new video or audio chunks after the file has been finalized.")},Wt=l,((a,r,n,o)=>{if(r&&"object"==typeof r||"function"==typeof r)for(let h of i(r))s.call(a,h)||h===n||e(a,h,{get:()=>r[h],enumerable:!(o=t(r,h))||o.enumerable});return a})(e({},"__esModule",{value:!0}),Wt)})();"object"==typeof module&&"object"==typeof module.exports&&Object.assign(module.exports,Mp4Muxer);
+//# sourceMappingURL=/sm/d72d5cf9845053fd379eb03c8aa0076e0f937f51c85e59b9c023ad3f33721c0b.map
+</script>
+
+<div id="bottomBar">
+  <button class="bbtn" id="shufBtn" title="Acak (shuffle)">🔀</button>
+  <button class="bbtn" id="prevBtn" title="Lagu sebelumnya (P)">⏮</button>
+  <button id="ppBtn">⏸</button>
+  <button class="bbtn" id="nextBtn" title="Lagu berikutnya (N)">⏭</button>
+  <button class="bbtn" id="rptBtn" title="Ulang playlist">🔁</button>
+  <span id="time">0:00</span>
+  <input type="range" id="seek" min="0" max="100" value="0" step="0.1">
+  <span id="time2">0:00</span>
+  <div id="volWrap">🔊<input type="range" id="vol" min="0" max="1" value="0.9" step="0.01"></div>
+  <span id="fpsMeter" title="Laju frame preview · skala render">— fps</span>
+  <button class="bbtn" id="fsBtn" title="Layar penuh (F)">⛶</button>
+</div>
+
+<audio id="audio" crossorigin="anonymous"></audio>
+
+<script>
+(() => {
+  const audio = document.getElementById('audio');
+  const canvas = document.getElementById('viz');
+  const ctx = canvas.getContext('2d');
+  const bgImage = document.getElementById('bgImage');
+  const hint = document.getElementById('hint');
+
+  const audioBtn = document.getElementById('audioBtn');
+  const imageBtn = document.getElementById('imageBtn');
+  const imgChk = document.getElementById('imgChk');
+  const hqChk = document.getElementById('hqChk');
+  const audioFile = document.getElementById('audioFile');
+  const imageFile = document.getElementById('imageFile');
+  const playBtn = document.getElementById('playBtn');
+  const ppBtn = document.getElementById('ppBtn');
+  const seek = document.getElementById('seek');
+  const vol = document.getElementById('vol');
+  const timeEl = document.getElementById('time');
+  const time2El = document.getElementById('time2');
+  const panel = document.getElementById('panel');
+  const togglePanel = document.getElementById('togglePanel');
+  const bottomBar = document.getElementById('bottomBar');
+  const bgVideo = document.getElementById('bgVideo');
+  const bgBtn = document.getElementById('bgBtn');
+  const bgFile = document.getElementById('bgFile');
+  const clearBg = document.getElementById('clearBg');
+  const bgBlur = document.getElementById('bgBlur');
+  const bgDim = document.getElementById('bgDim');
+  const vizStyle = document.getElementById('vizStyle');
+  const vizColor = document.getElementById('vizColor');
+  const vizSize = document.getElementById('vizSize');
+  const imgSize = document.getElementById('imgSize');
+  const resSelect = document.getElementById('resSelect');
+  const fpsSelect = document.getElementById('fpsSelect');
+  const dlBtn = document.getElementById('dlBtn');
+  const recBadge = document.getElementById('recBadge');
+  const recTime = document.getElementById('recTime');
+  const recStop = document.getElementById('recStop');
+  const recLabel = document.getElementById('recLabel');
+  const plList = document.getElementById('plList');
+  const chaptersEl = document.getElementById('chapters');
+  const chText = document.getElementById('chText');
+  const chCopy = document.getElementById('chCopy');
+  const chClose = document.getElementById('chClose');
+  const songTitle = document.getElementById('songTitle');
+  const artistName = document.getElementById('artistName');
+  const vizColor2 = document.getElementById('vizColor2');
+  const shufBtn = document.getElementById('shufBtn');
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  const rptBtn = document.getElementById('rptBtn');
+  const fsBtn = document.getElementById('fsBtn');
+  const trimStartIn = document.getElementById('trimStart');
+  const trimEndIn = document.getElementById('trimEnd');
+  const showProg = document.getElementById('showProg');
+  const normChk = document.getElementById('normChk');
+  const fadeChk = document.getElementById('fadeChk');
+  const thumbBtn = document.getElementById('thumbBtn');
+  const firePos = document.getElementById('firePos');
+  const fireLen = document.getElementById('fireLen');
+  const wmSize = document.getElementById('wmSize');
+  const titleSize = document.getElementById('titleSize');
+  const artistSize = document.getElementById('artistSize');
+  const bgImage2 = document.getElementById('bgImage2');
+  const presetSel = document.getElementById('presetSel');
+  const presetSave = document.getElementById('presetSave');
+  const presetDel = document.getElementById('presetDel');
+  const lrcBtn = document.getElementById('lrcBtn');
+  const lrcFile = document.getElementById('lrcFile');
+  const lyricsChk = document.getElementById('lyricsChk');
+  const wmBtn = document.getElementById('wmBtn');
+  const wmFile = document.getElementById('wmFile');
+  const wmChk = document.getElementById('wmChk');
+  const batchChk = document.getElementById('batchChk');
+  const previewQ = document.getElementById('previewQ');
+  const fpsMeter = document.getElementById('fpsMeter');
+
+  let audioCtx = null, analyser = null, dataArray = null;
+  let userImage = null;       // objek Image yang diupload user
+  let customBg = null;        // null = blur otomatis | 'image' | 'video'
+  let bgImageObj = null;      // objek Image background custom (utk export)
+  let hasAudio = false;
+  let recActive = false, recorder = null, recChunks = [];
+  let recCanvas = null, recCtx = null, recDest = null, recMime = '';
+  let fastRendering = false, cancelRender = false;
+  let rotation = 0;
+  let smoothBass = 0;
+  let shuffle = false;
+  let repeatMode = 0; // 0 = mati, 1 = ulang playlist, 2 = ulang 1 lagu
+  let rtTrimEnd = Infinity; // batas akhir potong utk rekam real-time
+  let progCur = 0, progDur = 0; // posisi & durasi utk progress bar di video
+  let lastRecRender = 0; // throttle render canvas rekaman ke FPS target
+  let dispFrame = 0;     // penghitung frame preview saat render cepat
+
+  // ===== Posisi kustom (seret elemen di layar) =====
+  // null = posisi default; {x,y} = koordinat relatif 0..1 (ikut semua resolusi)
+  let posCfg = { img: null, wm: null, title: null, artist: null };
+  // kotak-klik tiap elemen, diperbarui saat render ke layar (koordinat CSS px)
+  const hitRects = { img: null, wm: null, title: null, artist: null };
+  let dragKey = null, dragOffX = 0, dragOffY = 0;
+  let wmImage = null;    // logo watermark sudut
+  let activeLyrics = null; // lirik lagu yg sedang dirender [{t, text}]
+  let bgImages = [];     // foto-foto slideshow background
+  let bgClock = 0;       // detik utk slideshow (live: wall-time, export: frame/fps)
+  const SLIDE_DUR = 8;   // durasi tiap slide (detik)
+  const SLIDE_FADE = 1;  // durasi crossfade antar slide (detik)
+
+  // ===== Ukuran canvas mengikuti layar + skala render adaptif =====
+  // Backing store kanvas = piksel CSS × renderScale. Dulu selalu devicePixelRatio
+  // penuh: di laptop 4K/HiDPI berarti ±8 juta piksel dirender 60× per detik —
+  // itu sebab preview macet. Sekarang kualitas 'auto' memantau laju frame dan
+  // menurunkan skala sendiri bila frame terlambat, lalu naik lagi bila lega.
+  const dprMax = () => Math.min(window.devicePixelRatio || 1, 2);
+  let renderScale = 1;
+  let ladder = [];   // tangga skala mode auto, dari tertinggi ke terendah
+  let autoIdx = 0;   // posisi di tangga (mode auto)
+
+  function qualityLadder() {
+    const top = dprMax();
+    const l = [top, Math.min(top, 1.5), Math.min(top, 1), 0.75, 0.5]
+      .map(v => Math.round(v * 100) / 100);
+    return [...new Set(l)].sort((a, b) => b - a);
+  }
+  function resetAutoIdx() {
+    ladder = qualityLadder();
+    autoIdx = Math.max(0, ladder.findIndex(v => v <= 1.5));
+  }
+  function resize() {
+    canvas.width = Math.max(1, Math.round(innerWidth * renderScale));
+    canvas.height = Math.max(1, Math.round(innerHeight * renderScale));
+    ctx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
+  }
+  function applyQuality() {
+    ladder = qualityLadder();
+    const q = previewQ.value;
+    let s;
+    if (q === 'tinggi') s = ladder[0];
+    else if (q === 'sedang') s = Math.min(dprMax(), 1);
+    else if (q === 'rendah') s = 0.6;
+    else { autoIdx = Math.min(autoIdx, ladder.length - 1); s = ladder[autoIdx]; }
+    if (s !== renderScale) { renderScale = s; resize(); }
+  }
+  let resizeT = 0;
+  addEventListener('resize', () => {
+    resize();
+    // skala "cover" latar berubah → bakar ulang latar DOM (setelah resize reda)
+    clearTimeout(resizeT);
+    resizeT = setTimeout(() => scheduleDomBg(0), 250);
+  });
+  resetAutoIdx();
+  resize();
+
+  // kecilkan gambar besar SEKALI saat dimuat — foto 6000px yang digambar
+  // (dan di-clip) setiap frame adalah beban GPU yang tidak perlu
+  function downscaleImage(img, maxSide) {
+    const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
+    if (!iw || !ih || Math.max(iw, ih) <= maxSide) return img;
+    const s = maxSide / Math.max(iw, ih);
+    const cv = document.createElement('canvas');
+    cv.width = Math.max(1, Math.round(iw * s));
+    cv.height = Math.max(1, Math.round(ih * s));
+    const g = cv.getContext('2d');
+    g.imageSmoothingQuality = 'high';
+    g.drawImage(img, 0, 0, cv.width, cv.height);
+    return cv;
+  }
+
+  // ===== Playlist =====
+  const playlist = []; // {file, name, url, duration}
+  let currentTrack = 0;
+
+  // Windows kadang melaporkan file audio TANPA tipe MIME (registry kosong)
+  // — jadi cek ekstensi juga, jangan hanya percaya f.type
+  const AUDIO_EXT = /\.(wav|mp3|m4a|aac|ogg|oga|opus|flac|webm)$/i;
+  const isAudioFile = f => (f.type && f.type.startsWith('audio/')) || AUDIO_EXT.test(f.name);
+
+  function addTracks(files) {
+    for (const f of files) {
+      if (!isAudioFile(f)) continue;
+      const t = { file: f, name: f.name.replace(/\.[^.]+$/, ''), url: URL.createObjectURL(f), duration: 0 };
+      playlist.push(t);
+      // ambil durasi di latar belakang
+      const probe = new Audio();
+      probe.preload = 'metadata';
+      probe.src = t.url;
+      probe.onloadedmetadata = () => { t.duration = probe.duration; renderPlaylistUI(); };
+    }
+    if (!playlist.length) return;
+    hasAudio = true;
+    playBtn.disabled = false;
+    dlBtn.disabled = false;
+    audioBtn.textContent = '🎵 ' + playlist.length + ' lagu di playlist';
+    audioBtn.classList.add('loaded');
+    if (!audio.src) loadTrack(0);
+    renderPlaylistUI();
+  }
+
+  function loadTrack(i, autoplay) {
+    if (!playlist[i]) return;
+    currentTrack = i;
+    audio.src = playlist[i].url;
+    songTitle.value = playlist[i].name;
+    activeLyrics = playlist[i].lyrics || null;
+    renderPlaylistUI();
+    if (autoplay) audio.play();
+  }
+
+  function renderPlaylistUI() {
+    plList.classList.toggle('show', playlist.length > 0);
+    plList.innerHTML = '';
+    playlist.forEach((t, i) => {
+      const row = document.createElement('div');
+      row.className = 'plrow' + (i === currentTrack ? ' current' : '');
+      const num = document.createElement('span');
+      num.textContent = (i + 1) + '.';
+      const nm = document.createElement('span');
+      nm.className = 'plname';
+      nm.textContent = t.name;
+      nm.title = t.name;
+      nm.onclick = () => loadTrack(i, !audio.paused);
+      const du = document.createElement('span');
+      du.className = 'pldur';
+      du.textContent = t.duration ? fmt(t.duration) : '…';
+      const up = document.createElement('button');
+      up.textContent = '↑';
+      up.title = 'Naikkan urutan';
+      up.onclick = () => {
+        if (i === 0) return;
+        [playlist[i - 1], playlist[i]] = [playlist[i], playlist[i - 1]];
+        if (currentTrack === i) currentTrack = i - 1;
+        else if (currentTrack === i - 1) currentTrack = i;
+        renderPlaylistUI();
+      };
+      const rm = document.createElement('button');
+      rm.textContent = '✕';
+      rm.title = 'Hapus dari playlist';
+      rm.onclick = () => {
+        const wasCurrent = i === currentTrack;
+        playlist.splice(i, 1);
+        if (i < currentTrack) currentTrack--;
+        if (!playlist.length) {
+          hasAudio = false;
+          playBtn.disabled = true;
+          dlBtn.disabled = true;
+          audio.pause();
+          audio.removeAttribute('src');
+          currentTrack = 0;
+          audioBtn.textContent = '📂 Pilih file musik…';
+          audioBtn.classList.remove('loaded');
+        } else {
+          if (currentTrack >= playlist.length) currentTrack = playlist.length - 1;
+          if (wasCurrent) loadTrack(currentTrack);
+          audioBtn.textContent = '🎵 ' + playlist.length + ' lagu di playlist';
+        }
+        renderPlaylistUI();
+      };
+      row.append(num, nm, du, up, rm);
+      plList.appendChild(row);
+    });
+  }
+
+  // ===== Upload musik =====
+  audioBtn.addEventListener('click', () => audioFile.click());
+  audioFile.addEventListener('change', () => {
+    addTracks(audioFile.files);
+    audioFile.value = '';
+  });
+
+  // lanjut otomatis ke lagu berikutnya; stop rekaman di akhir playlist
+  audio.addEventListener('ended', () => {
+    if (recActive) {
+      // saat rekam real-time: selalu urut, stop di akhir playlist
+      if (currentTrack < playlist.length - 1) loadTrack(currentTrack + 1, true);
+      else stopExport();
+      return;
+    }
+    if (repeatMode === 2) { audio.currentTime = 0; audio.play(); return; }
+    if (shuffle && playlist.length > 1) { nextTrack(); return; }
+    if (currentTrack < playlist.length - 1) loadTrack(currentTrack + 1, true);
+    else if (repeatMode === 1) loadTrack(0, true);
+  });
+
+  // ===== Prev / Next / Shuffle / Repeat / Fullscreen =====
+  function nextTrack() {
+    if (!playlist.length) return;
+    if (shuffle && playlist.length > 1) {
+      let n;
+      do { n = Math.floor(Math.random() * playlist.length); } while (n === currentTrack);
+      loadTrack(n, true);
+    } else {
+      loadTrack((currentTrack + 1) % playlist.length, true);
+    }
+  }
+
+  function prevTrack() {
+    if (!playlist.length) return;
+    // lebih dari 3 detik berjalan → ulang lagu ini; kalau tidak → lagu sebelumnya
+    if (audio.currentTime > 3) { audio.currentTime = 0; return; }
+    loadTrack((currentTrack - 1 + playlist.length) % playlist.length, true);
+  }
+
+  nextBtn.addEventListener('click', nextTrack);
+  prevBtn.addEventListener('click', prevTrack);
+
+  shufBtn.addEventListener('click', () => {
+    shuffle = !shuffle;
+    shufBtn.classList.toggle('active', shuffle);
+    saveSettings();
+  });
+
+  const RPT_ICONS = ['🔁', '🔁', '🔂'];
+  const RPT_TITLES = ['Ulang: mati', 'Ulang: seluruh playlist', 'Ulang: 1 lagu'];
+  function applyRepeatUI() {
+    rptBtn.textContent = RPT_ICONS[repeatMode];
+    rptBtn.title = RPT_TITLES[repeatMode];
+    rptBtn.classList.toggle('active', repeatMode > 0);
+  }
+  rptBtn.addEventListener('click', () => {
+    repeatMode = (repeatMode + 1) % 3;
+    applyRepeatUI();
+    saveSettings();
+  });
+
+  fsBtn.addEventListener('click', () => {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else document.documentElement.requestFullscreen().catch(() => {});
+  });
+
+  document.getElementById('posReset').addEventListener('click', () => {
+    posCfg = { img: null, wm: null, title: null, artist: null };
+    saveSettings();
+  });
+
+  // ===== Upload gambar =====
+  imageBtn.addEventListener('click', () => imageFile.click());
+  imageFile.addEventListener('change', () => {
+    const f = imageFile.files[0];
+    if (!f) return;
+    const url = URL.createObjectURL(f);
+    const img = new Image();
+    img.onload = () => {
+      userImage = downscaleImage(img, 2048);
+      userImage.srcUrl = url;
+      imgVersion++;
+      bgVersion++;
+      // blur otomatis hanya jika belum ada background custom
+      if (!customBg) scheduleDomBg(0);
+    };
+    img.src = url;
+    imageBtn.textContent = '🖼️ ' + f.name;
+    imageBtn.classList.add('loaded');
+  });
+
+  // ===== Lirik sinkron (.lrc) =====
+  // format: [mm:ss.xx]teks — bisa beberapa timestamp per baris
+  function parseLRC(text) {
+    const out = [];
+    for (const raw of text.split(/\r?\n/)) {
+      const times = [...raw.matchAll(/\[(\d{1,2}):(\d{1,2}(?:[.:]\d{1,3})?)\]/g)];
+      if (!times.length) continue;
+      const lyric = raw.replace(/\[[^\]]*\]/g, '').trim();
+      for (const m of times) {
+        const sec = parseInt(m[1], 10) * 60 + parseFloat(m[2].replace(':', '.'));
+        if (isFinite(sec)) out.push({ t: sec, text: lyric });
+      }
+    }
+    out.sort((a, b) => a.t - b.t);
+    return out;
+  }
+
+  lrcBtn.addEventListener('click', () => lrcFile.click());
+  lrcFile.addEventListener('change', async () => {
+    const files = [...lrcFile.files];
+    lrcFile.value = '';
+    if (!files.length) return;
+    if (!playlist.length) {
+      alert('Tambahkan lagu dulu, baru muat file .lrc-nya (nama file .lrc harus sama dengan nama file lagu).');
+      return;
+    }
+    let attached = 0;
+    for (const f of files) {
+      let parsed;
+      try { parsed = parseLRC(await f.text()); } catch (e) { continue; }
+      if (!parsed.length) continue;
+      const base = f.name.replace(/\.[^.]+$/, '').toLowerCase();
+      // cocokkan dgn nama lagu; kalau tidak ketemu → lagu tunggal / lagu aktif
+      const target = playlist.find(t => t.name.toLowerCase() === base) ||
+        (playlist.length === 1 ? playlist[0] : (files.length === 1 ? playlist[currentTrack] : null));
+      if (!target) continue;
+      target.lyrics = parsed;
+      attached++;
+    }
+    const total = playlist.filter(t => t.lyrics && t.lyrics.length).length;
+    if (attached) {
+      lrcBtn.textContent = '📝 Lirik terpasang: ' + total + ' lagu';
+      lrcBtn.classList.add('loaded');
+      activeLyrics = playlist[currentTrack] ? playlist[currentTrack].lyrics || null : null;
+    } else {
+      alert('Tidak ada lirik yang cocok. Samakan nama file .lrc dengan nama file lagunya.');
+    }
+  });
+
+  // ===== Watermark sudut =====
+  wmBtn.addEventListener('click', () => wmFile.click());
+  wmFile.addEventListener('change', () => {
+    const f = wmFile.files[0];
+    wmFile.value = '';
+    if (!f) return;
+    const img = new Image();
+    img.onload = () => { wmImage = downscaleImage(img, 1024); };
+    img.src = URL.createObjectURL(f);
+    wmBtn.textContent = '©️ ' + f.name;
+    wmBtn.classList.add('loaded');
+  });
+
+  // ===== Upload background (foto / video / slideshow) =====
+  bgBtn.addEventListener('click', () => bgFile.click());
+  // bersihkan semua state background lama — dipakai setiap ganti mode
+  // agar perpindahan foto ⇄ video ⇄ slideshow selalu mulus tanpa sisa
+  function resetBgState() {
+    bgVideo.pause();
+    bgVideo.removeAttribute('src');
+    bgVideo.style.display = 'none';
+    bgImageObj = null;
+    bgImages = [];
+    domSlideIdx = -1;
+    clearTimeout(domFadeT);
+    bgImage2.style.opacity = '0';
+    bgImage2.style.backgroundImage = 'none';
+    bgVersion++;
+  }
+
+  bgFile.addEventListener('change', async () => {
+    const files = [...bgFile.files];
+    bgFile.value = '';
+    if (!files.length) return;
+    const video = files.find(f => f.type.startsWith('video/'));
+    const images = files.filter(f => f.type.startsWith('image/'));
+
+    resetBgState();
+
+    if (video) {
+      customBg = 'video';
+      bgVideo.src = URL.createObjectURL(video);
+      bgVideo.style.display = 'block';
+      bgVideo.play().catch(() => {});
+      bgImage.style.backgroundImage = 'none';
+      bgBtn.textContent = '🎬 ' + video.name;
+    } else if (images.length > 1) {
+      // slideshow: muat semua foto dulu supaya transisi tidak pernah menunggu decode
+      customBg = 'slideshow';
+      bgBtn.textContent = '⏳ memuat ' + images.length + ' foto…';
+      const loaded = await Promise.all(images.map(f => new Promise(res => {
+        const im = new Image();
+        im.onload = () => res(im);
+        im.onerror = () => res(null);
+        im.src = URL.createObjectURL(f);
+      })));
+      bgImages = loaded.filter(Boolean).map(im => { const d = downscaleImage(im, 2560); d.srcUrl = im.src; return d; });
+      if (!bgImages.length) {
+        customBg = null;
+        bgBtn.textContent = '🎬 Pilih foto/video background…';
+        applyBgFilter();
+        return;
+      }
+      bgVersion++;
+      bgClock = 0;
+      domSlideIdx = 0;
+      scheduleDomBg(0);
+      bgBtn.textContent = '🖼️ Slideshow ' + bgImages.length + ' foto';
+    } else if (images.length === 1) {
+      customBg = 'image';
+      const url = URL.createObjectURL(images[0]);
+      const im = new Image();
+      im.onload = () => { im.srcUrl = url; bgImageObj = im; bgVersion++; scheduleDomBg(0); };
+      im.src = url;
+      bgBtn.textContent = '🖼️ ' + images[0].name;
+    } else {
+      return;
+    }
+    bgBtn.classList.add('loaded');
+    clearBg.classList.add('show');
+    applyBgFilter();
+  });
+
+  // ===== Latar DOM: dibakar sekali, bukan difilter tiap frame =====
+  // Dulu: elemen selebar layar memakai CSS `filter: blur(40px)`. Filter pada
+  // layer komposit dihitung ulang GPU setiap kali kanvas di atasnya berubah —
+  // yaitu setiap frame — dan itu salah satu sumber lag terbesar. Sekarang
+  // gambar diburamkan SEKALI di kanvas kecil lalu dipasang sebagai
+  // background-image polos; kompositor tinggal menempel.
+  const CANVAS_FILTER_OK = typeof CanvasRenderingContext2D !== 'undefined' &&
+    'filter' in CanvasRenderingContext2D.prototype;
+  const domBgUrls = new Map();   // media → URL latar siap pakai
+  const bakedUrls = new Set();   // URL blob buatan sendiri (boleh di-revoke)
+  let domBgJob = 0, domBgTimer = 0;
+
+  function bakeBg(media, blurCss, bright, extra) {
+    return new Promise(resolve => {
+      const iw = media.width, ih = media.height;
+      if (!iw || !ih) return resolve(null);
+      if (!CANVAS_FILTER_OK) return resolve(media.srcUrl || null); // Safari lama: pakai CSS filter
+      // makin buram makin kecil kanvasnya boleh (detail hilang oleh blur)
+      const maxSide = blurCss >= 6 ? 800 : blurCss >= 2 ? 1400 : 2560;
+      const s = Math.min(1, maxSide / Math.max(iw, ih));
+      const sw = Math.max(2, Math.round(iw * s)), sh = Math.max(2, Math.round(ih * s));
+      const cover = Math.max((innerWidth + 120) / iw, (innerHeight + 120) / ih);
+      const blurPx = blurCss / cover * s; // radius blur CSS → piksel kanvas kecil
+      const cv = document.createElement('canvas');
+      cv.width = sw;
+      cv.height = sh;
+      const g = cv.getContext('2d');
+      g.fillStyle = '#0a0a12';
+      g.fillRect(0, 0, sw, sh);
+      g.filter = (blurPx > 0.25 ? `blur(${blurPx.toFixed(2)}px) ` : '') + `brightness(${bright})${extra}`;
+      const over = blurPx * 2.5; // overscan agar tepi blur tidak gelap
+      g.drawImage(media, -over, -over, sw + over * 2, sh + over * 2);
+      g.filter = 'none';
+      cv.toBlob(b => {
+        if (!b) return resolve(null);
+        const u = URL.createObjectURL(b);
+        bakedUrls.add(u);
+        resolve(u);
+      }, 'image/jpeg', 0.92);
+    });
+  }
+  function revokeBaked(list) {
+    for (const u of list) if (bakedUrls.has(u)) { URL.revokeObjectURL(u); bakedUrls.delete(u); }
+  }
+  function domBgParams() {
+    if (customBg === 'image' || customBg === 'slideshow') {
+      return { blur: parseInt(bgBlur.value, 10), bright: 1 - parseInt(bgDim.value, 10) / 100, extra: '' };
+    }
+    return { blur: 40, bright: 0.5, extra: ' saturate(1.2)' }; // mode otomatis
+  }
+  async function rebuildDomBg() {
+    const job = ++domBgJob;
+    let list;
+    if (customBg === 'video') list = [];
+    else if (customBg === 'slideshow') list = bgImages;
+    else if (customBg === 'image') list = bgImageObj ? [bgImageObj] : [];
+    else list = userImage ? [userImage] : [];
+    if (!list.length) {
+      bgImage.style.backgroundImage = 'none';
+      const old = [...domBgUrls.values()];
+      domBgUrls.clear();
+      setTimeout(() => revokeBaked(old), 1500);
+      return;
+    }
+    const p = domBgParams();
+    const urls = await Promise.all(list.map(m => bakeBg(m, p.blur, p.bright, p.extra)));
+    if (job !== domBgJob) { revokeBaked(urls.filter(Boolean)); return; } // sudah ada job lebih baru
+    const old = [...domBgUrls.values()];
+    domBgUrls.clear();
+    list.forEach((m, i) => { if (urls[i]) domBgUrls.set(m, urls[i]); });
+    const cur = customBg === 'slideshow' ? bgImages[Math.max(0, domSlideIdx) % bgImages.length] : list[0];
+    const u = domBgUrls.get(cur);
+    bgImage.style.backgroundImage = u ? `url(${u})` : 'none';
+    setTimeout(() => revokeBaked(old.filter(x => !domBgUrls.has(x))), 1500); // tunggu crossfade selesai
+  }
+  function scheduleDomBg(delay) {
+    clearTimeout(domBgTimer);
+    domBgTimer = setTimeout(rebuildDomBg, delay == null ? 60 : delay);
+  }
+
+  // crossfade slideshow di preview: layer atas fade-in, lalu jadi layer dasar
+  let domSlideIdx = -1, domFadeT = 0;
+  function tickSlideshowDom() {
+    if (customBg !== 'slideshow' || bgImages.length < 2) return;
+    const idx = Math.floor(bgClock / SLIDE_DUR) % bgImages.length;
+    if (idx === domSlideIdx) return;
+    const u = domBgUrls.get(bgImages[idx]);
+    if (!u) return; // belum selesai dibakar → coba lagi frame berikutnya
+    domSlideIdx = idx;
+    bgImage2.style.backgroundImage = `url(${u})`;
+    bgImage2.style.opacity = '1';
+    clearTimeout(domFadeT);
+    domFadeT = setTimeout(() => {
+      bgImage.style.backgroundImage = `url(${u})`;
+      bgImage2.style.transition = 'none';
+      bgImage2.style.opacity = '0';
+      void bgImage2.offsetWidth; // paksa reflow agar transisi aktif kembali
+      bgImage2.style.transition = 'opacity 1s ease';
+    }, 1100);
+  }
+
+  function applyBgFilter() {
+    const blur = parseInt(bgBlur.value, 10);
+    const bright = 1 - parseInt(bgDim.value, 10) / 100;
+    if (customBg === 'video') {
+      // video: blur memang harus per frame (CSS). Peredupan lewat opacity —
+      // latar body nyaris hitam, hasilnya sama tapi jauh lebih murah dari filter
+      bgVideo.style.filter = blur > 0 ? `blur(${blur}px)` : 'none';
+      bgVideo.style.opacity = String(bright);
+      return;
+    }
+    if (CANVAS_FILTER_OK) {
+      bgImage.style.filter = 'none';
+      bgImage2.style.filter = 'none';
+    } else {
+      const f = customBg ? `blur(${blur}px) brightness(${bright})` : 'blur(40px) brightness(0.5) saturate(1.2)';
+      bgImage.style.filter = f;
+      bgImage2.style.filter = f;
+    }
+    scheduleDomBg();
+  }
+  bgBlur.addEventListener('input', applyBgFilter);
+  bgDim.addEventListener('input', applyBgFilter);
+
+  clearBg.addEventListener('click', () => {
+    resetBgState();
+    customBg = null;
+    applyBgFilter(); // kembali ke blur otomatis dari gambar tengah
+    bgBtn.textContent = '🎬 Pilih foto/video background…';
+    bgBtn.classList.remove('loaded');
+    clearBg.classList.remove('show');
+  });
+
+  // ===== Seret elemen (logo/watermark/judul/artis) utk atur posisi =====
+  function pickAt(mx, my) {
+    // elemen kecil diprioritaskan agar tidak "kalah" dari lingkaran gambar besar
+    for (const k of ['wm', 'title', 'artist', 'img']) {
+      const r = hitRects[k];
+      if (r && mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) return { k, r };
+    }
+    return null;
+  }
+  canvas.addEventListener('pointerdown', e => {
+    if (fastRendering || recActive) return;
+    const hit = pickAt(e.clientX, e.clientY);
+    if (!hit) return;
+    dragKey = hit.k;
+    dragOffX = hit.r.rx - e.clientX;
+    dragOffY = hit.r.ry - e.clientY;
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+    e.preventDefault();
+  });
+  canvas.addEventListener('pointermove', e => {
+    if (dragKey) {
+      posCfg[dragKey] = {
+        x: Math.min(0.99, Math.max(0.01, (e.clientX + dragOffX) / innerWidth)),
+        y: Math.min(0.99, Math.max(0.01, (e.clientY + dragOffY) / innerHeight))
+      };
+    } else {
+      const cur = !recActive && pickAt(e.clientX, e.clientY) ? 'move' : 'default';
+      if (canvas.style.cursor !== cur) canvas.style.cursor = cur; // hindari style recalc tiap gerak
+    }
+  });
+  canvas.addEventListener('pointerup', e => {
+    if (!dragKey) return;
+    dragKey = null;
+    try { canvas.releasePointerCapture(e.pointerId); } catch (err) {}
+    saveSettings();
+  });
+
+  // scroll di atas elemen = ubah ukurannya (slider ikut bergerak & tersimpan)
+  canvas.addEventListener('wheel', e => {
+    if (fastRendering || recActive) return;
+    const hit = pickAt(e.clientX, e.clientY);
+    if (!hit) return;
+    e.preventDefault();
+    const map = { img: imgSize, wm: wmSize, title: titleSize, artist: artistSize };
+    const inp = map[hit.k];
+    const step = e.deltaY < 0 ? 5 : -5;
+    inp.value = Math.max(parseInt(inp.min, 10),
+      Math.min(parseInt(inp.max, 10), parseInt(inp.value, 10) + step));
+    inp.dispatchEvent(new Event('input'));
+  }, { passive: false });
+
+  // Drag & drop di mana saja
+  addEventListener('dragover', e => e.preventDefault());
+  addEventListener('drop', e => {
+    e.preventDefault();
+    const audios = [...e.dataTransfer.files].filter(isAudioFile);
+    if (audios.length) addTracks(audios);
+    for (const f of e.dataTransfer.files) {
+      if (isAudioFile(f)) {
+        continue; // sudah ditangani addTracks
+      } else if (f.type.startsWith('video/')) {
+        const dt = new DataTransfer(); dt.items.add(f);
+        bgFile.files = dt.files;
+        bgFile.dispatchEvent(new Event('change'));
+      } else if (f.type.startsWith('image/')) {
+        const dt = new DataTransfer(); dt.items.add(f);
+        imageFile.files = dt.files;
+        imageFile.dispatchEvent(new Event('change'));
+      }
+    }
+  });
+
+  // ===== Web Audio setup =====
+  function initAudio() {
+    if (audioCtx) return;
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const src = audioCtx.createMediaElementSource(audio);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 512;
+    analyser.smoothingTimeConstant = 0.82;
+    src.connect(analyser);
+    analyser.connect(audioCtx.destination);
+    dataArray = new Uint8Array(analyser.frequencyBinCount);
+  }
+
+  // ===== Kontrol play =====
+  playBtn.addEventListener('click', () => {
+    initAudio();
+    audioCtx.resume();
+    audio.play();
+    hint.style.display = 'none';
+    panel.classList.add('hidden');
+    togglePanel.classList.add('show');
+    bottomBar.classList.add('show');
+  });
+
+  togglePanel.addEventListener('click', () => {
+    const hidden = panel.classList.toggle('hidden');
+    togglePanel.title = hidden ? 'Buka pengaturan' : 'Tutup pengaturan';
+  });
+
+  ppBtn.addEventListener('click', () => {
+    if (audio.paused) { audioCtx && audioCtx.resume(); audio.play(); }
+    else audio.pause();
+  });
+  audio.addEventListener('play',  () => ppBtn.textContent = '⏸');
+  audio.addEventListener('pause', () => ppBtn.textContent = '▶');
+
+  vol.addEventListener('input', () => audio.volume = parseFloat(vol.value));
+  audio.volume = 0.9;
+
+  let seeking = false;
+  seek.addEventListener('input', () => { seeking = true; });
+  seek.addEventListener('change', () => {
+    if (audio.duration) audio.currentTime = (seek.value / 100) * audio.duration;
+    seeking = false;
+  });
+  audio.addEventListener('timeupdate', () => {
+    if (!seeking && audio.duration) seek.value = (audio.currentTime / audio.duration) * 100;
+    timeEl.textContent = fmt(audio.currentTime);
+    time2El.textContent = fmt(audio.duration || 0);
+  });
+
+  function fmt(s) {
+    s = Math.floor(s || 0);
+    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  }
+
+  // "1:30" / "01:02:03" / "90" → detik; kosong/tidak valid → null
+  function parseTime(str) {
+    str = (str || '').trim();
+    if (!str) return null;
+    const parts = str.split(':').map(Number);
+    if (parts.some(p => isNaN(p) || p < 0)) return null;
+    let s = 0;
+    for (const p of parts) s = s * 60 + p;
+    return s;
+  }
+
+  // ===== Shortcut keyboard =====
+  // Spasi = play/pause | ←/→ = mundur/maju 5 detik | ↑/↓ = volume
+  // N/P = lagu berikut/sebelumnya | F = layar penuh
+  addEventListener('keydown', e => {
+    const tag = e.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    if (!hasAudio && e.code !== 'KeyF') return;
+    switch (e.code) {
+      case 'Space':
+        e.preventDefault();
+        ppBtn.click();
+        break;
+      case 'ArrowRight':
+        e.preventDefault();
+        if (audio.duration) audio.currentTime = Math.min(audio.duration, audio.currentTime + 5);
+        break;
+      case 'ArrowLeft':
+        e.preventDefault();
+        audio.currentTime = Math.max(0, audio.currentTime - 5);
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        vol.value = Math.min(1, parseFloat(vol.value) + 0.05);
+        audio.volume = parseFloat(vol.value);
+        break;
+      case 'ArrowDown':
+        e.preventDefault();
+        vol.value = Math.max(0, parseFloat(vol.value) - 0.05);
+        audio.volume = parseFloat(vol.value);
+        break;
+      case 'KeyN':
+        nextTrack();
+        break;
+      case 'KeyP':
+        prevTrack();
+        break;
+      case 'KeyF':
+        fsBtn.click();
+        break;
+    }
+  });
+
+  // ===== Util warna & cache objek gambar =====
+  const rgbCache = new Map();
+  function hexToRgb(hex) {
+    let v = rgbCache.get(hex);
+    if (!v) {
+      const n = parseInt(hex.slice(1), 16);
+      v = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+      rgbCache.set(hex, v);
+    }
+    return v;
+  }
+  // palet per frame: string "r,g,b" dibuat sekali, bukan ratusan kali per frame
+  let palCache = null;
+  function getPal(h1, h2) {
+    if (palCache && palCache.h1 === h1 && palCache.h2 === h2) return palCache;
+    const [r, g, b] = hexToRgb(h1), [r2, g2, b2] = hexToRgb(h2);
+    palCache = { h1, h2, r, g, b, r2, g2, b2, c1: r + ',' + g + ',' + b, c2: r2 + ',' + g2 + ',' + b2, key: h1 + h2 };
+    return palCache;
+  }
+
+  // cache gradien per konteks: createLinearGradient 100-150× per frame
+  // (satu per batang) diganti dgn kunci geometri terkuantisasi
+  const gradCaches = new WeakMap();
+  function cachedGrad(c, key, make) {
+    let m = gradCaches.get(c);
+    if (!m) { m = new Map(); gradCaches.set(c, m); }
+    let g = m.get(key);
+    if (!g) {
+      if (m.size > 512) m.clear();
+      g = make();
+      m.set(key, g);
+    }
+    return g;
+  }
+
+  // sprite teks: fillText + shadowBlur tiap frame mahal (blur dihitung ulang
+  // setiap kali). Teks dirender SEKALI ke kanvas kecil (dgn bayangannya) lalu
+  // tinggal drawImage. Kunci = teks+font+warna+blur+resolusi.
+  const FONT = '"Segoe UI", system-ui';
+  const measureCtx = document.createElement('canvas').getContext('2d');
+  function fontStr(weight, px) { return `${weight} ${px}px ${FONT}`; }
+  function measureW(text, weight, px) {
+    measureCtx.font = fontStr(weight, px);
+    return measureCtx.measureText(text).width;
+  }
+  const textSprites = new Map();
+  function textSprite(text, weight, px, fill, blur, shadow, res) {
+    const key = [weight, px, fill, blur, res, text].join('|');
+    let s = textSprites.get(key);
+    if (s) { textSprites.delete(key); textSprites.set(key, s); return s; } // LRU
+    const dpx = px * res, dblur = blur * res;
+    measureCtx.font = fontStr(weight, dpx);
+    const m = measureCtx.measureText(text);
+    const asc = Math.ceil(m.actualBoundingBoxAscent || dpx * 0.8);
+    const desc = Math.ceil(m.actualBoundingBoxDescent || dpx * 0.25);
+    const left = Math.max(0, Math.ceil(m.actualBoundingBoxLeft || 0));
+    const right = Math.ceil(Math.max(m.width, m.actualBoundingBoxRight || 0));
+    const pad = Math.ceil(dblur * 1.5) + 2;
+    const cv = document.createElement('canvas');
+    cv.width = Math.max(1, Math.min(16384, left + right + pad * 2));
+    cv.height = Math.max(1, Math.min(4096, asc + desc + pad * 2));
+    const g = cv.getContext('2d');
+    g.font = fontStr(weight, dpx);
+    g.textAlign = 'left';
+    g.textBaseline = 'alphabetic';
+    g.fillStyle = fill;
+    if (dblur > 0) { g.shadowColor = shadow || 'rgba(0,0,0,0.7)'; g.shadowBlur = dblur; }
+    g.fillText(text, pad + left, pad + asc);
+    s = { cv, ox: (pad + left) / res, oy: (pad + asc) / res, w: cv.width / res, h: cv.height / res, textW: m.width / res };
+    textSprites.set(key, s);
+    if (textSprites.size > 48) textSprites.delete(textSprites.keys().next().value);
+    return s;
+  }
+  // gambar sprite dgn jangkar (x, y) = garis dasar teks, persis seperti fillText
+  function drawSprite(c, s, x, y, align) {
+    const ax = align === 'center' ? x - s.textW / 2 : align === 'right' ? x - s.textW : x;
+    c.drawImage(s.cv, ax - s.ox, y - s.oy, s.w, s.h);
+  }
+
+  // ===== Render loop =====
+  let frameData = new Uint8Array(256); // diam sebelum play
+
+  // pengukur laju frame — dasar meter fps & penyesuaian kualitas otomatis
+  let rafPrev = 0, lastRenderTs = 0, refreshMs = 1000 / 60;
+  let renderEma = 0, jsEma = 0, slowMs = 0, goodMs = 0, lastAdapt = 0;
+  const bannedUntil = []; // level yg baru saja terbukti lambat — jangan naik ke sana dulu
+  let meterFrames = 0, meterT0 = 0;
+  let recDirty = false;
+
+  function adaptQuality(ts, since, wantMs) {
+    // interval render ideal = kelipatan refresh layar yg memenuhi batas laju
+    const expected = Math.ceil((wantMs - refreshMs * 0.5) / refreshMs) * refreshMs;
+    renderEma = renderEma ? renderEma * 0.85 + since * 0.15 : since;
+    if (renderEma > expected * 1.45) { slowMs += since; goodMs = 0; }
+    else {
+      slowMs = Math.max(0, slowMs - since * 0.5);
+      if (renderEma < expected * 1.1 && jsEma < expected * 0.45) goodMs += since; else goodMs = 0;
+    }
+    if (slowMs > 700 && autoIdx < ladder.length - 1 && ts - lastAdapt > 2000) {
+      bannedUntil[autoIdx] = ts + 40000;
+      autoIdx++;
+      applyQuality();
+      lastAdapt = ts; slowMs = goodMs = 0; renderEma = 0;
+    } else if (goodMs > 5000 && autoIdx > 0 && ts - lastAdapt > 5000 && !(bannedUntil[autoIdx - 1] > ts)) {
+      autoIdx--;
+      applyQuality();
+      lastAdapt = ts; slowMs = goodMs = 0; renderEma = 0;
+    }
+  }
+
+  function draw(ts) {
+    requestAnimationFrame(draw);
+    ts = ts || performance.now();
+    if (rafPrev) {
+      const d = ts - rafPrev;
+      if (d >= 3 && d < refreshMs) refreshMs = d; // interval refresh layar ≈ delta rAF terkecil
+    }
+    rafPrev = ts;
+
+    const playing = hasAudio && !audio.paused;
+    const busy = fastRendering || recActive;
+    // batas laju: 60 fps saat main, 30 fps saat jeda. Layar 120/144 Hz tidak
+    // perlu merender 2× lipat — tak terlihat di mata, tapi terasa di CPU/GPU.
+    const capMs = busy || playing || dragKey ? 1000 / 60 : 1000 / 30;
+    const wantMs = Math.max(capMs, refreshMs);
+    const since = ts - lastRenderTs;
+    if (since < wantMs - refreshMs * 0.5) return; // belum waktunya
+    const dtSec = lastRenderTs ? Math.min(0.1, since / 1000) : 1 / 60;
+    lastRenderTs = ts;
+    const t0 = performance.now();
+
+    // saat render cepat, frameData/smoothBass/rotation dikontrol loop export
+    if (!fastRendering) {
+      if (analyser) {
+        analyser.getByteFrequencyData(dataArray);
+        frameData = dataArray;
+      }
+
+      // rata-rata bass (bin rendah) untuk efek pulse
+      let bass = 0;
+      for (let i = 2; i < 24; i++) bass += frameData[i];
+      bass /= 22 * 255;
+      smoothBass += (bass - smoothBass) * 0.12;
+
+      // langkah relatif 60 Hz — animasi sama cepat di 30/60/144 Hz & saat frame drop
+      const dtF = Math.min(3, dtSec * 60);
+      updateParticles(dtF);
+      progCur = audio.currentTime || 0;
+      progDur = (hasAudio && audio.duration) || 0;
+      bgClock += dtSec;
+      tickSlideshowDom();
+      if (!audio.paused) rotation += (0.0018 + smoothBass * 0.004) * dtF;
+    }
+
+    if (recActive && recCtx) {
+      // rekam real-time: adegan dirender SEKALI di kanvas rekaman (resolusi
+      // output, sesuai FPS target); layar hanya menampilkan salinannya.
+      // Dulu dirender dua kali per frame (layar + rekaman) → patah-patah.
+      const frameMs = 1000 / (parseInt(fpsSelect.value, 10) || 30);
+      if (t0 - lastRecRender >= frameMs - 2) {
+        lastRecRender = t0;
+        renderScene(recCtx, recCanvas.width, recCanvas.height, true);
+        recDirty = true;
+      }
+      if (recDirty) {
+        recDirty = false;
+        ctx.clearRect(0, 0, innerWidth, innerHeight);
+        const k = Math.min(innerWidth / recCanvas.width, innerHeight / recCanvas.height);
+        const dw = recCanvas.width * k, dh = recCanvas.height * k;
+        ctx.drawImage(recCanvas, (innerWidth - dw) / 2, (innerHeight - dh) / 2, dw, dh);
+      }
+    } else if (!fastRendering || (dispFrame++ % 6) === 0) {
+      // saat render cepat, preview layar cukup ~10fps agar CPU fokus ke export
+      ctx.clearRect(0, 0, innerWidth, innerHeight);
+      renderScene(ctx, innerWidth, innerHeight, false);
+    }
+
+    // --- meter fps & kualitas otomatis ---
+    const js = performance.now() - t0;
+    jsEma = jsEma ? jsEma * 0.9 + js * 0.1 : js;
+    meterFrames++;
+    if (ts - meterT0 >= 500) {
+      if (meterT0) {
+        const fps = Math.round(meterFrames * 1000 / (ts - meterT0));
+        fpsMeter.textContent = fps + ' fps · ' + (Math.round(renderScale * 100) / 100) + '×';
+      }
+      meterT0 = ts;
+      meterFrames = 0;
+    }
+    if (playing && !busy && previewQ.value === 'auto' && since < 250) adaptQuality(ts, since, wantMs);
+  }
+
+  let curRes = 1; // rasio piksel konteks yg sedang dirender (ketajaman sprite)
+  function renderScene(c, W, H, withBg) {
+    const data = frameData;
+    if (withBg) drawExportBg(c, W, H);
+    curRes = c === ctx ? renderScale : 1;
+
+    const pal = getPal(vizColor.value, vizColor2.value);
+    const cx = W / 2, cy = H / 2;
+    const style = vizStyle.value;
+    const u = Math.min(W, H) / 900; // unit skala utk resolusi berbeda
+
+    if (style === 'circular') drawCircular(c, W, H, u, data, cx, cy, pal);
+    else if (style === 'ring') drawRing(c, W, H, u, data, cx, cy, pal);
+    else if (style === 'mirror') drawMirror(c, W, H, u, data, pal);
+    else if (style === 'wave') drawWave(c, W, H, u, data, pal);
+    else if (style === 'particles') drawParticles(c, W, H, u, cx, cy, pal);
+    else if (style === 'fire') drawFire(c, W, H, u, data);
+    else drawBars(c, W, H, u, data, pal);
+
+    // gambar user di tengah (visual di dasar layar: naikkan sedikit agar tak tertutup)
+    // — bisa dimatikan lewat toggle "Tampilkan gambar di video"
+    if (imgChk.checked) {
+      if (style === 'bars' || (style === 'fire' && firePos.value === 'bottom')) {
+        drawCenterImage(c, W, H, u, cx, cy - 40 * u);
+      } else {
+        drawCenterImage(c, W, H, u, cx, cy);
+      }
+    } else if (c === ctx) {
+      hitRects.img = null;
+    }
+
+    drawText(c, W, H, u, cx, cy, style);
+    drawLyrics(c, W, H, u);
+    if (showProg.checked && progDur > 0) drawProgress(c, W, H, u, pal);
+    drawWatermark(c, W, H, u);
+  }
+
+  // ===== Lirik sinkron di video =====
+  function drawLyrics(c, W, H, u) {
+    if (!lyricsChk.checked || !activeLyrics || !activeLyrics.length) return;
+    const t = progCur;
+    let i = -1;
+    while (i + 1 < activeLyrics.length && activeLyrics[i + 1].t <= t) i++;
+    const cur = i >= 0 ? activeLyrics[i] : null;
+    const nxt = activeLyrics[i + 1];
+    const cx = W / 2;
+    const yCur = H - 118 * u;
+    if (cur && cur.text) {
+      let size = Math.round(30 * u);
+      const wTxt = measureW(cur.text, 600, size);
+      if (wTxt > W * 0.92) size = Math.max(12, Math.floor(size * W * 0.92 / wTxt)); // baris panjang: kecilkan
+      drawSprite(c, textSprite(cur.text, 600, size, 'rgba(255,255,255,0.96)', 10 * u, 'rgba(0,0,0,0.8)', curRes), cx, yCur, 'center');
+    }
+    if (nxt && nxt.text) {
+      drawSprite(c, textSprite(nxt.text, 400, Math.round(19 * u), 'rgba(255,255,255,0.45)', 10 * u, 'rgba(0,0,0,0.8)', curRes), cx, yCur + 32 * u, 'center');
+    }
+  }
+
+  // ===== Watermark sudut kanan-atas =====
+  function drawWatermark(c, W, H, u) {
+    if (!wmChk.checked || !wmImage || !wmImage.width) {
+      if (c === ctx) hitRects.wm = null;
+      return;
+    }
+    const h = 52 * u * (wmSize.value / 100);
+    const w = h * (wmImage.width / wmImage.height);
+    // default kanan-atas; posisi kustom disimpan sebagai titik tengah elemen
+    let x = W - w - 24 * u, y = 24 * u;
+    if (posCfg.wm) {
+      x = posCfg.wm.x * W - w / 2;
+      y = posCfg.wm.y * H - h / 2;
+    }
+    c.save();
+    c.globalAlpha = 0.85;
+    c.drawImage(wmImage, x, y, w, h);
+    c.restore();
+    if (c === ctx) hitRects.wm = { x, y, w, h, rx: x + w / 2, ry: y + h / 2 };
+  }
+
+  function drawProgress(c, W, H, u, pal) {
+    const bw = W * 0.6, bh = 5 * u;
+    const x = (W - bw) / 2, y = H - 44 * u;
+    const p = Math.max(0, Math.min(1, progCur / progDur));
+    c.save();
+    // jalur
+    c.fillStyle = 'rgba(255,255,255,0.18)';
+    rrect(c, x, y, bw, bh, bh / 2);
+    c.fill();
+    // isian gradasi warna 1 → warna 2 (gradien di-cache: geometrinya tetap)
+    if (p > 0.002) {
+      c.fillStyle = cachedGrad(c, 'p|' + pal.key + '|' + Math.round(x) + '|' + Math.round(bw), () => {
+        const grad = c.createLinearGradient(x, 0, x + bw, 0);
+        grad.addColorStop(0, `rgb(${pal.c1})`);
+        grad.addColorStop(1, `rgb(${pal.c2})`);
+        return grad;
+      });
+      rrect(c, x, y, bw * p, bh, bh / 2);
+      c.fill();
+    }
+    c.restore();
+    // waktu berjalan & total di kedua ujung (sprite; hanya berubah tiap detik)
+    const px = Math.round(13 * u), yMid = y + bh / 2;
+    const s1 = textSprite(fmt(progCur), 500, px, 'rgba(255,255,255,0.75)', 6 * u, 'rgba(0,0,0,0.6)', curRes);
+    drawSprite(c, s1, x - 14 * u, yMid + px * 0.35, 'right'); // baseline ≈ tengah em + 0.35em
+    const s2 = textSprite(fmt(progDur), 500, px, 'rgba(255,255,255,0.75)', 6 * u, 'rgba(0,0,0,0.6)', curRes);
+    drawSprite(c, s2, x + bw + 14 * u, yMid + px * 0.35, 'left');
+  }
+
+  function rrect(c, x, y, w, h, rad) {
+    rad = Math.min(rad, w / 2, h / 2);
+    c.beginPath();
+    if (c.roundRect) c.roundRect(x, y, w, h, rad);
+    else c.rect(x, y, w, h);
+  }
+
+  // cover-fit media ke seluruh canvas (overscan agar tepi blur tidak pudar)
+  function drawCover(c, media, mw, mh, W, H, over) {
+    if (!mw || !mh) return;
+    const s = Math.max((W + over * 2) / mw, (H + over * 2) / mh);
+    c.drawImage(media, W / 2 - mw * s / 2, H / 2 - mh * s / 2, mw * s, mh * s);
+  }
+
+  // background untuk video hasil export (meniru tampilan DOM)
+  // blur dikerjakan di kanvas kecil 1/3 resolusi lalu diperbesar —
+  // ~9× lebih ringan dan hasil visual sama (memang diburamkan)
+  let bgScratch = null, bgScratchCtx = null;
+  let bgVersion = 0; // naik setiap media background berganti → cache basi
+  const bgCaches = []; // cache bg statis (maks 3 slot — cukup utk crossfade slideshow)
+  let lastGoodBg = null, lastGoodBgVersion = -1; // frame video bg terakhir yg berhasil digambar
+  // pompa frame utk render cepat: tiap frame video yg tersaji disalin ke kanvas
+  // perantara via requestVideoFrameCallback — tidak bergantung timing loop render
+  let bgPumpCv = null, bgPumpCtx = null, bgPumpFresh = false;
+
+  function cachedBgCanvas(key, W, H, renderFn) {
+    let e = bgCaches.find(x => x.key === key);
+    if (!e) {
+      e = { key, canvas: document.createElement('canvas') };
+      e.canvas.width = W;
+      e.canvas.height = H;
+      renderFn(e.canvas.getContext('2d'));
+      bgCaches.push(e);
+      if (bgCaches.length > 3) bgCaches.shift();
+    }
+    return e.canvas;
+  }
+
+  function renderBgInto(c, W, H, media, mw, mh, blur, bright, extra) {
+    c.fillStyle = '#0a0a12';
+    c.fillRect(0, 0, W, H);
+    if (blur > 2) {
+      const ds = 3;
+      const sw = Math.max(2, Math.round(W / ds));
+      const sh = Math.max(2, Math.round(H / ds));
+      if (!bgScratch) {
+        bgScratch = document.createElement('canvas');
+        bgScratchCtx = bgScratch.getContext('2d');
+      }
+      if (bgScratch.width !== sw || bgScratch.height !== sh) {
+        bgScratch.width = sw;
+        bgScratch.height = sh;
+      }
+      const sc = bgScratchCtx;
+      sc.fillStyle = '#0a0a12';
+      sc.fillRect(0, 0, sw, sh);
+      sc.filter = `blur(${blur / ds}px) brightness(${bright})${extra}`;
+      drawCover(sc, media, mw, mh, sw, sh, (blur / ds) * 2);
+      sc.filter = 'none';
+      c.drawImage(bgScratch, 0, 0, sw, sh, -4, -4, W + 8, H + 8);
+    } else {
+      c.filter = `brightness(${bright})${extra}`;
+      drawCover(c, media, mw, mh, W, H, 0);
+      c.filter = 'none';
+    }
+  }
+
+  function drawExportBg(c, W, H) {
+    const k = H / innerHeight;
+    let media = null, mw = 0, mh = 0;
+    let blur = parseInt(bgBlur.value, 10) * k;
+    let bright = 1 - parseInt(bgDim.value, 10) / 100;
+    let extra = '';
+
+    // slideshow: slide ditentukan bgClock (deterministik di export), crossfade 1 dtk
+    if (customBg === 'slideshow' && bgImages.length) {
+      const n = bgImages.length;
+      const idx = Math.floor(bgClock / SLIDE_DUR) % n;
+      const phase = bgClock % SLIDE_DUR;
+      const baseKey = ['ss', bgVersion, blur.toFixed(1), bright.toFixed(2), W, H].join('|');
+      const canvasOf = j => cachedBgCanvas(baseKey + '|' + j, W, H,
+        cc => renderBgInto(cc, W, H, bgImages[j], bgImages[j].width, bgImages[j].height, blur, bright, ''));
+      if (n > 1 && phase < SLIDE_FADE && bgClock >= SLIDE_DUR) {
+        const prev = (idx - 1 + n) % n;
+        c.drawImage(canvasOf(prev), 0, 0);
+        c.globalAlpha = phase / SLIDE_FADE;
+        c.drawImage(canvasOf(idx), 0, 0);
+        c.globalAlpha = 1;
+      } else {
+        c.drawImage(canvasOf(idx), 0, 0);
+      }
+      return;
+    }
+
+    // video: saat frame siap → gambar + simpan salinan ("frame terakhir yang
+    // baik"); saat decoder tertinggal karena seek menggantung → pakai salinan
+    // itu, JANGAN jatuh ke fallback gelap (penyebab kedip terang-gelap di
+    // hasil render playlist dgn background video)
+    if (customBg === 'video') {
+      // saat render cepat pakai frame dari pompa (selalu frame tersaji terbaru);
+      // di luar itu (preview/rekam real-time) langsung dari elemen video
+      const pumpOk = fastRendering && bgPumpFresh && bgPumpCv && bgPumpCv.width > 0;
+      const ready = pumpOk || (bgVideo.readyState >= 2 && bgVideo.videoWidth > 0);
+      if (ready) {
+        const m = pumpOk ? bgPumpCv : bgVideo;
+        const mwv = pumpOk ? bgPumpCv.width : bgVideo.videoWidth;
+        const mhv = pumpOk ? bgPumpCv.height : bgVideo.videoHeight;
+        if (!lastGoodBg) lastGoodBg = document.createElement('canvas');
+        if (lastGoodBg.width !== W || lastGoodBg.height !== H) {
+          lastGoodBg.width = W;
+          lastGoodBg.height = H;
+        }
+        renderBgInto(lastGoodBg.getContext('2d'), W, H, m, mwv, mhv, blur, bright, '');
+        lastGoodBgVersion = bgVersion;
+        c.drawImage(lastGoodBg, 0, 0, W, H);
+        return;
+      }
+      if (lastGoodBg && lastGoodBg.width > 0 && lastGoodBgVersion === bgVersion) {
+        c.drawImage(lastGoodBg, 0, 0, W, H);
+        return;
+      }
+      // belum pernah ada frame baik (video baru dimuat) → fallback di bawah
+    }
+
+    if (customBg === 'image' && bgImageObj) {
+      media = bgImageObj; mw = bgImageObj.width; mh = bgImageObj.height;
+    } else if (userImage) {
+      media = userImage; mw = userImage.width; mh = userImage.height;
+      blur = 40 * k; bright = 0.5; extra = ' saturate(1.2)';
+    }
+    if (!media || !mw || !mh) {
+      c.fillStyle = '#0a0a12';
+      c.fillRect(0, 0, W, H);
+      return;
+    }
+    const key = [customBg, bgVersion, blur.toFixed(1), bright.toFixed(2), extra, W, H].join('|');
+    c.drawImage(cachedBgCanvas(key, W, H,
+      cc => renderBgInto(cc, W, H, media, mw, mh, blur, bright, extra)), 0, 0);
+  }
+
+  const TAU = Math.PI * 2;
+  const BASE_RADIUS = (W, H) => Math.min(W, H) * 0.17;
+  const vizScale = () => vizSize.value / 100;   // skala ukuran visualizer
+  const imgScale = () => imgSize.value / 100;   // skala ukuran gambar tengah
+  const VIZ_R = (W, H) => BASE_RADIUS(W, H) * vizScale();
+  const IMG_R = (W, H) => BASE_RADIUS(W, H) * imgScale();
+
+  // Pendar cincin TANPA shadowBlur: tiga goresan lebar berlapis makin
+  // transparan. shadowBlur memaksa GPU mem-blur ulang seluruh kotak bentuk
+  // setiap frame — di 4K/8K radius blur-nya ratusan piksel. Ini sumber
+  // "macet-macet" nomor satu di preview maupun export.
+  function glowRing(c, cx, cy, rad, col, alpha, spread, lw) {
+    alpha = Math.min(1, alpha);
+    for (let i = 3; i >= 1; i--) {
+      c.beginPath();
+      c.arc(cx, cy, rad, 0, TAU);
+      c.lineWidth = lw + spread * i / 3;
+      c.strokeStyle = `rgba(${col},${(alpha * 0.14 / i).toFixed(3)})`;
+      c.stroke();
+    }
+    c.beginPath();
+    c.arc(cx, cy, rad, 0, TAU);
+    c.lineWidth = lw;
+    c.strokeStyle = `rgba(${col},${alpha.toFixed(3)})`;
+    c.stroke();
+  }
+
+  function drawCircular(c, W, H, u, data, cx, cy, pal) {
+    const N = 120;
+    const radius = VIZ_R(W, H) * (1 + smoothBass * 0.12) + 24 * u;
+    const maxLen = Math.min(W, H) * 0.22 * vizScale();
+    // gradien tiap batang di-cache: konteks diputar per batang sehingga
+    // semua batang menggambar sepanjang sumbu-X → kunci hanya (radius, panjang)
+    const rq = Math.round(radius / (3 * u)), qr = rq * 3 * u;
+    const stepL = maxLen / 24;
+    const kBase = 'c|' + pal.key + '|' + Math.round(u * 100) + '|' + rq + '|';
+    const c1 = `rgba(${pal.c1},0.9)`, c2 = `rgba(${pal.c2},0.25)`;
+    c.save();
+    c.translate(cx, cy);
+    c.rotate(rotation);
+    c.lineWidth = (TAU * radius / N) * 0.55;
+    c.lineCap = 'round';
+    const dAng = TAU / N;
+    for (let i = 0; i < N; i++) {
+      const v = data[Math.floor(i * 200 / N) + 2] / 255;
+      const len = 4 * u + v * maxLen;
+      const ql = Math.max(1, Math.ceil(len / stepL));
+      c.strokeStyle = cachedGrad(c, kBase + ql, () => {
+        const grad = c.createLinearGradient(qr, 0, qr + ql * stepL, 0);
+        grad.addColorStop(0, c1);
+        grad.addColorStop(1, c2);
+        return grad;
+      });
+      c.beginPath();
+      c.moveTo(radius, 0);
+      c.lineTo(radius + len, 0);
+      c.stroke();
+      c.rotate(dAng);
+    }
+    c.restore();
+
+    // ring glow
+    glowRing(c, cx, cy, radius - 8 * u, pal.c1, 0.25 + smoothBass * 0.5, (20 + smoothBass * 40) * u, 2 * u);
+  }
+
+  function drawRing(c, W, H, u, data, cx, cy, pal) {
+    const radius = VIZ_R(W, H) * (1 + smoothBass * 0.1) + 30 * u;
+    const N = 180;
+    const amp = Math.min(W, H) * 0.09 * vizScale();
+
+    for (let pass = 0; pass < 2; pass++) {
+      c.beginPath();
+      for (let i = 0; i <= N; i++) {
+        const v = data[Math.floor((i % N) * 160 / N) + 2] / 255;
+        const rr = radius + v * amp * (pass === 0 ? 1 : 0.6) + pass * 6 * u;
+        const ang = (i / N) * TAU + rotation * (pass === 0 ? 1 : -0.7);
+        const x = cx + Math.cos(ang) * rr;
+        const y = cy + Math.sin(ang) * rr;
+        i === 0 ? c.moveTo(x, y) : c.lineTo(x, y);
+      }
+      c.closePath();
+      if (pass === 0) {
+        // halo pengganti shadowBlur: goresan lebar transparan di bawah garis utama
+        c.lineWidth = 16 * u; c.strokeStyle = `rgba(${pal.c1},0.10)`; c.stroke();
+        c.lineWidth = 7 * u;  c.strokeStyle = `rgba(${pal.c1},0.18)`; c.stroke();
+        c.lineWidth = 2.5 * u; c.strokeStyle = `rgba(${pal.c1},0.85)`;
+      } else {
+        c.lineWidth = 1.2 * u; c.strokeStyle = `rgba(${pal.c2},0.55)`;
+      }
+      c.stroke();
+    }
+  }
+
+  const barH = new Float32Array(160); // tinggi batang per frame (dipakai ulang, tanpa alokasi)
+
+  function drawBars(c, W, H, u, data, pal) {
+    const N = 96;
+    const bw = W / N;
+    const maxH = H * 0.38 * vizScale();
+    const step = 2 * u;
+    const kBase = 'b|' + pal.key + '|' + Math.round(H) + '|' + Math.round(step * 10) + '|';
+    const c1 = `rgba(${pal.c1},0.95)`, c2 = `rgba(${pal.c2},0.15)`;
+    for (let i = 0; i < N; i++) {
+      const v = data[Math.floor(i * 200 / N) + 2] / 255;
+      const h = barH[i] = 3 * u + v * maxH;
+      const q = Math.max(1, Math.round(h / step));
+      c.fillStyle = cachedGrad(c, kBase + q, () => {
+        const grad = c.createLinearGradient(0, H, 0, H - q * step);
+        grad.addColorStop(0, c1);
+        grad.addColorStop(1, c2);
+        return grad;
+      });
+      c.fillRect(i * bw + bw * 0.15, H - h, bw * 0.7, h);
+    }
+    // refleksi tipis (satu warna → satu fillStyle utk semua batang)
+    c.fillStyle = `rgba(${pal.c2},0.12)`;
+    for (let i = 0; i < N; i++) c.fillRect(i * bw + bw * 0.15, H - barH[i] - 2 * u, bw * 0.7, 2 * u);
+  }
+
+  function drawMirror(c, W, H, u, data, pal) {
+    const N = 72;
+    const bw = W / N;
+    const cy = H / 2;
+    const maxH = H * 0.26 * vizScale() * (1 + smoothBass * 0.15);
+    const step = 2 * u;
+    const kBase = 'm|' + pal.key + '|' + Math.round(cy) + '|' + Math.round(step * 10) + '|';
+    const c1 = `rgba(${pal.c1},0.95)`, c2 = `rgba(${pal.c2},0.85)`;
+    for (let i = 0; i < N; i++) {
+      // simetris: frekuensi rendah di tengah, tinggi di tepi
+      const half = Math.abs(i - (N - 1) / 2) / ((N - 1) / 2);
+      const v = data[Math.floor(half * 160) + 2] / 255;
+      const h = 4 * u + v * maxH;
+      const q = Math.max(1, Math.round(h / step));
+      c.fillStyle = cachedGrad(c, kBase + q, () => {
+        const qh = q * step;
+        const grad = c.createLinearGradient(0, cy - qh, 0, cy + qh);
+        grad.addColorStop(0, c2);
+        grad.addColorStop(0.5, c1);
+        grad.addColorStop(1, c2);
+        return grad;
+      });
+      c.fillRect(i * bw + bw * 0.15, cy - h, bw * 0.7, h * 2);
+    }
+    // garis tengah glow
+    c.fillStyle = `rgba(255,255,255,${(0.15 + smoothBass * 0.35).toFixed(3)})`;
+    c.fillRect(0, cy - u, W, 2 * u);
+  }
+
+  function drawWave(c, W, H, u, data, pal) {
+    const cy = H / 2;
+    const N = 120;
+    const amp = H * 0.2 * vizScale() * (1 + smoothBass * 0.2);
+    const qa = Math.max(1, Math.round(amp / (4 * u)));
+
+    for (let pass = 0; pass < 2; pass++) {
+      const k = pass === 0 ? 1 : 0.55;
+      c.beginPath();
+      for (let i = 0; i <= N; i++) {
+        const t = i / N;
+        const half = Math.abs(t - 0.5) * 2; // 0 tengah → 1 tepi
+        const v = data[Math.floor(half * 150) + 2] / 255;
+        const x = t * W;
+        const y = cy - (2 * u + v * amp * k);
+        i === 0 ? c.moveTo(x, y) : c.lineTo(x, y);
+      }
+      for (let i = N; i >= 0; i--) {
+        const t = i / N;
+        const half = Math.abs(t - 0.5) * 2;
+        const v = data[Math.floor(half * 150) + 2] / 255;
+        c.lineTo(t * W, cy + (2 * u + v * amp * k));
+      }
+      c.closePath();
+      c.fillStyle = cachedGrad(c, 'w|' + pal.key + '|' + pass + '|' + Math.round(cy) + '|' + Math.round(u * 100) + '|' + qa, () => {
+        const a = qa * 4 * u;
+        const grad = c.createLinearGradient(0, cy - a, 0, cy + a);
+        grad.addColorStop(0, `rgba(${pal.c2},${pass === 0 ? 0.55 : 0.3})`);
+        grad.addColorStop(0.5, `rgba(${pal.c1},${pass === 0 ? 0.8 : 0.4})`);
+        grad.addColorStop(1, `rgba(${pal.c2},${pass === 0 ? 0.55 : 0.3})`);
+        return grad;
+      });
+      if (pass === 0) {
+        // halo pengganti shadowBlur: dua goresan lebar transparan mengelilingi bentuk
+        c.lineWidth = 30 * u; c.strokeStyle = `rgba(${pal.c1},0.06)`; c.stroke();
+        c.lineWidth = 12 * u; c.strokeStyle = `rgba(${pal.c1},0.09)`; c.stroke();
+      }
+      c.fill();
+    }
+  }
+
+  // ===== Partikel (koordinat relatif 0..1 agar konsisten di semua resolusi) =====
+  let particles = [];
+  let firePs = []; // asap ('s') & bara ('e') untuk gaya 'fire'
+
+  function updateFire(dt) {
+    if (vizStyle.value !== 'fire') { if (firePs.length) firePs = []; return; }
+    // percikan api sinematik: streak kecil menyala, terbang naik tertiup angin
+    const target = 85;
+    const spawn = 1 + Math.round(smoothBass * 4);
+    for (let i = 0; i < spawn && firePs.length < target; i++) {
+      const big = Math.random() < 0.15; // sesekali percikan besar (kesan dekat kamera)
+      const bottom = firePos.value === 'bottom';
+      const baseY = bottom ? 0.84 : 0.42;
+      const span = bottom ? 0.15 : 0.28;
+      const frac = fireFrac(); // lahir di dalam lebar garis spektrum
+      firePs.push({
+        x: (1 - frac) / 2 + Math.random() * frac,
+        y: baseY + Math.random() * span, // lahir di sekitar garis spektrum
+        vx: (Math.random() - 0.35) * 0.0016, // condong ke satu arah spt tertiup angin
+        vy: -(0.0012 + Math.random() * 0.0035) * (big ? 1.4 : 1),
+        thick: big ? 2.2 + Math.random() * 1.6 : 0.8 + Math.random() * 1.2,
+        heat: Math.random(), // 0 merah tua → 1 kuning terang
+        life: 1,
+        decay: 0.004 + Math.random() * 0.008,
+        tw: Math.random() * Math.PI * 2
+      });
+    }
+    // update + buang yg mati di tempat (tanpa alokasi array baru tiap frame)
+    let w = 0;
+    for (let i = 0; i < firePs.length; i++) {
+      const p = firePs[i];
+      p.tw += 0.08 * dt;
+      p.vx += Math.sin(p.tw) * 0.00004 * dt; // turbulensi halus
+      p.x += p.vx * dt * (1 + smoothBass);
+      p.y += p.vy * dt * (1 + smoothBass * 1.5);
+      p.life -= p.decay * dt;
+      if (p.life > 0 && p.y > -0.05 && p.x > -0.05 && p.x < 1.05) firePs[w++] = p;
+    }
+    firePs.length = w;
+  }
+
+  function updateParticles(dt) {
+    updateFire(dt); // sistem api ikut jalur update yg sama (live & export)
+    if (vizStyle.value !== 'particles') { if (particles.length) particles = []; return; }
+    const target = 90;
+    const spawn = 1 + Math.round(smoothBass * 4);
+    for (let i = 0; i < spawn && particles.length < target; i++) {
+      particles.push({
+        x: Math.random(),
+        y: 1.02 + Math.random() * 0.08,
+        s: 0.25 + Math.random() * 0.75,            // ukuran & campuran warna
+        v: (0.0008 + Math.random() * 0.0016),      // kecepatan naik per frame @60fps
+        drift: (Math.random() - 0.5) * 0.0005,
+        tw: Math.random() * Math.PI * 2            // fase kelip
+      });
+    }
+    let w = 0;
+    for (let i = 0; i < particles.length; i++) {
+      const p = particles[i];
+      p.y -= p.v * dt * (1 + smoothBass * 2.5);
+      p.x += p.drift * dt;
+      p.tw += 0.06 * dt;
+      if (p.y > -0.05) particles[w++] = p;
+    }
+    particles.length = w;
+  }
+
+  function drawParticles(c, W, H, u, cx, cy, pal) {
+    const { r, g, b, r2, g2, b2 } = pal;
+    // glow via 2 lingkaran (besar transparan + inti) — lebih murah dr shadowBlur
+    for (const p of particles) {
+      const mix = p.s;
+      const pr = Math.round(r + (r2 - r) * mix);
+      const pg = Math.round(g + (g2 - g) * mix);
+      const pb = Math.round(b + (b2 - b) * mix);
+      const alpha = Math.min(1, (0.35 + 0.4 * Math.sin(p.tw) * 0.5 + 0.2) * (0.6 + smoothBass * 0.8));
+      const size = (2 + p.s * 6) * u * (1 + smoothBass * 0.6);
+      const px = p.x * W, py = p.y * H;
+      c.beginPath();
+      c.arc(px, py, size * 2.2, 0, TAU);
+      c.fillStyle = `rgba(${pr},${pg},${pb},${(alpha * 0.22).toFixed(3)})`;
+      c.fill();
+      c.beginPath();
+      c.arc(px, py, size, 0, TAU);
+      c.fillStyle = `rgba(${pr},${pg},${pb},${alpha.toFixed(3)})`;
+      c.fill();
+    }
+
+    // cincin glow di sekeliling gambar tengah, berdenyut mengikuti bass
+    // (ikut pindah bila gambar diseret ke posisi kustom)
+    if (posCfg.img) { cx = posCfg.img.x * W; cy = posCfg.img.y * H; }
+    const ringR = IMG_R(W, H) * (1 + smoothBass * 0.06) + 14 * u;
+    glowRing(c, cx, cy, ringR, pal.c1, 0.3 + smoothBass * 0.6, (18 + smoothBass * 50) * u, 3 * u);
+  }
+
+  // ===== Fire Spectrum + Sparks — spektrum bergaya api + percikan sinematik =====
+  const fireFrac = () => fireLen.value === 'half' ? 0.5 : fireLen.value === 'quarter' ? 0.25 : 1;
+
+  function drawFire(c, W, H, u, data) {
+    const bottom = firePos.value === 'bottom';
+    const frac = fireFrac();
+    const SW = W * frac;            // lebar garis spektrum (penuh/setengah/seperempat)
+    const X0 = (W - SW) / 2;        // selalu di tengah secara horizontal
+    const cy = bottom ? H - 3 * u : H / 2; // posisi bawah = benar-benar dasar layar
+    const maxH = H * (bottom ? 0.4 : 0.3) * vizScale() * (1 + smoothBass * 0.35);
+    const downK = bottom ? 0 : 0.75; // posisi bawah: tanpa pantulan ke bawah
+
+    // pendar hangat tipis di sekitar garis spektrum (bagian dari nyala api)
+    const band = c.createLinearGradient(0, cy - maxH * 0.55, 0, cy + maxH * 0.55 * downK + 4 * u);
+    band.addColorStop(0, 'rgba(255,80,10,0)');
+    band.addColorStop(0.5, `rgba(255,90,15,${(0.14 + smoothBass * 0.2).toFixed(3)})`);
+    band.addColorStop(1, 'rgba(255,80,10,0)');
+    c.fillStyle = band;
+    c.fillRect(X0, cy - maxH * 0.55, SW, maxH * 0.55 * (1 + downK) + 4 * u);
+
+    // batang spektrum rapat bergaya api: inti kuning-putih di garis dasar,
+    // ujung merah memudar; tinggi mengikuti musik (kelip hanya bumbu ±12%)
+    // Gradien di-cache per (tinggi terkuantisasi, kecerahan) — bukan 144 gradien baru per frame.
+    const N = Math.max(48, Math.round(144 * frac));
+    const bw = SW / N;
+    const t = rotation * 13; // waktu kelip (sinkron dgn clock export)
+    const step = 2 * u;
+    const kBase = 'f|' + Math.round(cy) + '|' + Math.round(H) + '|' + Math.round(step * 10) + '|' + downK + '|';
+    for (let i = 0; i < N; i++) {
+      const half = Math.abs(i - (N - 1) / 2) / ((N - 1) / 2); // bass di tengah
+      const v = data[Math.floor(half * 160) + 2] / 255;
+      const vv = Math.pow(v, 1.35); // kontras: puncak beat lebih menonjol
+      const flick = 0.5 + 0.5 * Math.sin(i * 2.17 + t) * Math.sin(i * 0.63 - t * 1.29);
+      const h = (3 * u + vv * maxH) * (0.88 + 0.12 * flick);
+      const hDown = Math.min(h * downK, H - cy - 2 * u);
+      const x = X0 + i * bw + bw * 0.22, w = bw * 0.56;
+      const q = Math.max(1, Math.round(h / step));
+      const vq = Math.round(vv * 4);
+      c.fillStyle = cachedGrad(c, kBase + q + '|' + vq, () => {
+        const qh = q * step;
+        const qDown = Math.min(qh * downK, H - cy - 2 * u);
+        const total = qh + qDown;
+        const cp = qh / total; // posisi garis inti di dalam gradien
+        const bright = vq / 4;
+        const grad = c.createLinearGradient(0, cy - qh, 0, cy + qDown);
+        grad.addColorStop(0, 'rgba(190,25,5,0)');
+        grad.addColorStop(cp * 0.58, `rgba(230,60,10,${(0.5 + bright * 0.4).toFixed(3)})`);
+        grad.addColorStop(Math.min(1, cp), 'rgba(255,235,180,0.95)');
+        if (cp < 0.999) {
+          grad.addColorStop(cp + (1 - cp) * 0.36, `rgba(230,60,10,${(0.45 + bright * 0.35).toFixed(3)})`);
+          grad.addColorStop(1, 'rgba(190,25,5,0)');
+        }
+        return grad;
+      });
+      c.fillRect(x, cy - h, w, h + hDown);
+    }
+
+    // garis inti panas + pendarnya (gradien vertikal, pengganti shadowBlur)
+    const gq = Math.max(1, Math.round((10 + smoothBass * 22) / 2));
+    const gh = gq * 2 * u;
+    c.fillStyle = cachedGrad(c, 'fc|' + Math.round(cy) + '|' + Math.round(u * 100) + '|' + gq, () => {
+      const grad = c.createLinearGradient(0, cy - gh, 0, cy + gh);
+      grad.addColorStop(0, 'rgba(255,120,20,0)');
+      grad.addColorStop(0.5, 'rgba(255,140,30,0.35)');
+      grad.addColorStop(1, 'rgba(255,120,20,0)');
+      return grad;
+    });
+    c.fillRect(X0, cy - gh, SW, gh * 2);
+    c.fillStyle = `rgba(255,240,200,${(0.55 + smoothBass * 0.35).toFixed(3)})`;
+    c.fillRect(X0, cy - u, SW, 2 * u);
+
+    // percikan api sinematik: streak searah gerak (kesan motion blur)
+    // glow via 2 goresan (tebal transparan + inti) — jauh lebih murah dr shadowBlur
+    c.lineCap = 'round';
+    for (const p of firePs) {
+      const a = Math.max(0, p.life) * (0.5 + 0.5 * Math.sin(p.tw * 3));
+      if (a <= 0.03) continue;
+      const x = p.x * W, y = p.y * H;
+      const streak = 5 + p.thick * 2.2;
+      const dx = p.vx * W * streak, dy = p.vy * H * streak;
+      const gCh = Math.round(120 + p.heat * 120);
+      c.beginPath();
+      c.moveTo(x, y);
+      c.lineTo(x - dx, y - dy);
+      c.lineWidth = p.thick * 3 * u;
+      c.strokeStyle = `rgba(255,120,20,${(Math.min(1, a) * 0.3).toFixed(3)})`;
+      c.stroke();
+      c.lineWidth = p.thick * u;
+      c.strokeStyle = `rgba(255,${gCh},30,${Math.min(1, a).toFixed(3)})`;
+      c.stroke();
+    }
+  }
+
+  // Gambar tengah: lingkaran ter-clip + bingkai dirender SEKALI ke sprite pada
+  // ukuran denyut maksimum, lalu tiap frame hanya drawImage yg diskalakan.
+  // Dulu clip() + drawImage foto resolusi asli setiap frame.
+  const circleSprites = new Map();
+  let imgVersion = 0;
+  function circleSprite(dBase, u, res) {
+    const key = imgVersion + '|' + Math.round(dBase) + '|' + Math.round(u * 100) + '|' + res;
+    let s = circleSprites.get(key);
+    if (s) return s;
+    if (circleSprites.size >= 3) circleSprites.delete(circleSprites.keys().next().value);
+    const lw = 3 * u;
+    const S = Math.ceil(dBase + lw * 2 + 4);
+    const cv = document.createElement('canvas');
+    cv.width = Math.max(1, Math.round(S * res));
+    cv.height = cv.width;
+    const g = cv.getContext('2d');
+    g.scale(res, res);
+    const cc = S / 2, rad = dBase / 2;
+    g.save();
+    g.beginPath();
+    g.arc(cc, cc, rad, 0, TAU);
+    g.closePath();
+    g.clip();
+    if (userImage) {
+      // cover-fit ke lingkaran
+      const iw = userImage.width, ih = userImage.height;
+      const sc = Math.max(dBase / iw, dBase / ih);
+      g.imageSmoothingQuality = 'high';
+      g.drawImage(userImage, cc - iw * sc / 2, cc - ih * sc / 2, iw * sc, ih * sc);
+    } else {
+      g.fillStyle = 'rgba(255,255,255,0.06)';
+      g.fillRect(cc - rad, cc - rad, dBase, dBase);
+      g.fillStyle = 'rgba(255,255,255,0.35)';
+      g.font = `${dBase * 0.3}px system-ui`;
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillText('🎵', cc, cc + dBase * 0.02);
+    }
+    g.restore();
+    // border lingkaran
+    g.beginPath();
+    g.arc(cc, cc, rad, 0, TAU);
+    g.strokeStyle = 'rgba(255,255,255,0.25)';
+    g.lineWidth = lw;
+    g.stroke();
+    s = { cv, S, d: dBase };
+    circleSprites.set(key, s);
+    return s;
+  }
+
+  function drawCenterImage(c, W, H, u, cx, cy) {
+    // posisi kustom (hasil seret) menimpa default
+    if (posCfg.img) { cx = posCfg.img.x * W; cy = posCfg.img.y * H; }
+    const size = IMG_R(W, H) * 2 * (1 + smoothBass * 0.06);
+    if (c === ctx) {
+      hitRects.img = { x: cx - size / 2, y: cy - size / 2, w: size, h: size, rx: cx, ry: cy };
+    }
+    const sp = circleSprite(IMG_R(W, H) * 2 * 1.06, u, curRes);
+    const k = size / sp.d, ds = sp.S * k;
+    c.drawImage(sp.cv, cx - ds / 2, cy - ds / 2, ds, ds);
+  }
+
+  function drawText(c, W, H, u, cx, cy, style) {
+    const title = songTitle.value.trim();
+    const artist = artistName.value.trim();
+    if (!title && !artist) {
+      if (c === ctx) { hitRects.title = null; hitRects.artist = null; }
+      return;
+    }
+
+    // posisi teks menyesuaikan elemen terluar (gambar atau visualizer)
+    const vizOuter = VIZ_R(W, H) + Math.min(W, H) * 0.22 * vizScale() + 24 * u;
+    let yBase;
+    if (style === 'bars' || (style === 'fire' && firePos.value === 'bottom')) {
+      yBase = cy - 40 * u + IMG_R(W, H) + 50 * u;
+    } else if (style === 'mirror' || style === 'wave' || style === 'fire') {
+      yBase = cy + Math.max(IMG_R(W, H), H * 0.28 * vizScale()) + 40 * u;
+    } else if (style === 'particles') {
+      yBase = cy + IMG_R(W, H) + 60 * u;
+    } else {
+      yBase = cy + Math.max(IMG_R(W, H), vizOuter) + 40 * u;
+    }
+
+    // posisi kustom (hasil seret) menimpa default; artis mengikuti judul
+    // bila hanya judul yang dipindah. Skala ukuran dari slider (atau scroll).
+    const ts = titleSize.value / 100;
+    const as = artistSize.value / 100;
+    let tx = cx, ty = yBase;
+    if (posCfg.title) { tx = posCfg.title.x * W; ty = posCfg.title.y * H; }
+    let ax = tx, ay = ty + 28 * u * Math.max(1, ts);
+    if (posCfg.artist) { ax = posCfg.artist.x * W; ay = posCfg.artist.y * H; }
+
+    // teks + bayangan sebagai sprite (dirender ulang hanya bila teks/ukuran berubah)
+    if (title) {
+      const sp = textSprite(title, 600, Math.round(26 * u * ts), 'rgba(255,255,255,0.95)', 12 * u, 'rgba(0,0,0,0.7)', curRes);
+      drawSprite(c, sp, tx, ty, 'center');
+      if (c === ctx) {
+        const w = Math.max(60, sp.textW);
+        hitRects.title = { x: tx - w / 2, y: ty - 26 * u * ts, w, h: 34 * u * ts, rx: tx, ry: ty };
+      }
+    } else if (c === ctx) {
+      hitRects.title = null;
+    }
+    if (artist) {
+      const sp = textSprite(artist, 400, Math.round(16 * u * as), 'rgba(255,255,255,0.55)', 12 * u, 'rgba(0,0,0,0.7)', curRes);
+      drawSprite(c, sp, ax, ay, 'center');
+      if (c === ctx) {
+        const w = Math.max(50, sp.textW);
+        hitRects.artist = { x: ax - w / 2, y: ay - 16 * u * as, w, h: 22 * u * as, rx: ax, ry: ay };
+      }
+    } else if (c === ctx) {
+      hitRects.artist = null;
+    }
+  }
+
+  // ===== Export / Download Video =====
+  function pickMime() {
+    const cands = [
+      'video/mp4;codecs="avc1.42E01E,mp4a.40.2"',
+      'video/mp4',
+      'video/webm;codecs=vp9,opus',
+      'video/webm;codecs=vp8,opus',
+      'video/webm'
+    ];
+    return cands.find(m => MediaRecorder.isTypeSupported(m)) || '';
+  }
+
+  function startExport() {
+    if (!hasAudio || recActive) return;
+    initAudio();
+    audioCtx.resume();
+
+    const [rw, rh] = resSelect.value.split('x').map(Number);
+    const fps = parseInt(fpsSelect.value, 10);
+
+    recCanvas = document.createElement('canvas');
+    recCanvas.width = rw;
+    recCanvas.height = rh;
+    recCtx = recCanvas.getContext('2d', { alpha: false, desynchronized: true });
+
+    const stream = recCanvas.captureStream(fps);
+    recDest = audioCtx.createMediaStreamDestination();
+    analyser.connect(recDest);
+    stream.addTrack(recDest.stream.getAudioTracks()[0]);
+
+    recMime = pickMime();
+    // bitrate proporsional resolusi & fps (patokan 1080p30 ≈ 10 Mbps)
+    const bps = Math.min(60e6, Math.round(10e6 * (rw * rh) / (1920 * 1080) * Math.max(1, fps / 30)));
+    try {
+      recorder = new MediaRecorder(stream, { mimeType: recMime, videoBitsPerSecond: bps, audioBitsPerSecond: 192000 });
+    } catch (err) {
+      alert('Browser tidak mendukung perekaman video: ' + err.message);
+      return;
+    }
+
+    recChunks = [];
+    recorder.ondataavailable = e => { if (e.data.size) recChunks.push(e.data); };
+    recorder.onstop = saveRecording;
+
+    // rentang potong (opsional): mulai dari posisi potong, berhenti di batas akhir
+    // (handler 'ended' global otomatis lanjut lagu & stop di akhir playlist)
+    const T0 = parseTime(trimStartIn.value) || 0;
+    const T1v = parseTime(trimEndIn.value);
+    rtTrimEnd = T1v == null ? Infinity : T1v;
+    let startIdx = 0, startOff = 0, acc = 0;
+    for (let i = 0; i < playlist.length; i++) {
+      const d = playlist[i].duration || 0;
+      if (T0 < acc + d || i === playlist.length - 1) {
+        startIdx = i;
+        startOff = Math.max(0, Math.min(T0 - acc, Math.max(0, d - 0.5)));
+        break;
+      }
+      acc += d;
+    }
+    loadTrack(startIdx);
+    if (startOff > 0) {
+      audio.addEventListener('loadedmetadata', function h() { audio.currentTime = startOff; }, { once: true });
+    } else {
+      audio.currentTime = 0;
+    }
+    audio.play();
+    recorder.start(500);
+    recActive = true;
+
+    hint.style.display = 'none';
+    panel.classList.add('hidden');
+    togglePanel.classList.add('show');
+    bottomBar.classList.add('show');
+    recBadge.classList.add('show');
+    dlBtn.disabled = true;
+  }
+
+  function stopExport() {
+    if (!recActive) return;
+    recActive = false;
+    rtTrimEnd = Infinity;
+    try { recorder.stop(); } catch (e) {}
+    try { analyser.disconnect(recDest); } catch (e) {}
+    recBadge.classList.remove('show');
+    dlBtn.disabled = false;
+  }
+
+  function saveRecording() {
+    const ext = recMime.includes('mp4') ? 'mp4' : 'webm';
+    const blob = new Blob(recChunks, { type: recMime || 'video/webm' });
+    recChunks = [];
+    downloadBlob(blob, ext);
+  }
+
+  // ===== Render Cepat (WebCodecs — tanpa menunggu lagu diputar) =====
+  function canFastExport() {
+    return !!(window.Mp4Muxer && window.VideoEncoder && window.AudioEncoder &&
+              window.isSecureContext && playlist.length);
+  }
+
+  // yield cepat berbasis MessageChannel — setTimeout(0) punya jeda minimum ±1-4ms
+  // yang menumpuk jadi detik-detik terbuang pada render video panjang
+  const microYield = (() => {
+    const mc = new MessageChannel();
+    let pending = null;
+    mc.port1.onmessage = () => { const r = pending; pending = null; if (r) r(); };
+    return () => new Promise(res => { pending = res; mc.port2.postMessage(0); });
+  })();
+
+  // seek video background & tunggu frame siap (dgn batas waktu agar tak macet)
+  // timeoutMs bisa dinaikkan utk seek yang mahal (seek pertama / loop-balik)
+  function seekBgVideo(t, timeoutMs) {
+    return new Promise(resolve => {
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        bgVideo.removeEventListener('seeked', finish);
+        resolve();
+      };
+      bgVideo.addEventListener('seeked', finish);
+      try { bgVideo.currentTime = t; } catch (e) { finish(); }
+      setTimeout(finish, timeoutMs || 250);
+    });
+  }
+
+  // tunggu frame video benar-benar siap digambar (readyState >= 2)
+  async function waitBgVideoReady(maxMs) {
+    const t0 = performance.now();
+    while (bgVideo.readyState < 2 && performance.now() - t0 < maxMs) {
+      await new Promise(r => setTimeout(r, 40));
+    }
+  }
+
+  function downloadBlob(blob, ext) {
+    const name = (songTitle.value.trim() || 'music-visualizer')
+      .replace(/[\\/:*?"<>|]/g, '') + ' [' + resSelect.value + ' ' + fpsSelect.value + 'fps].' + ext;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  }
+
+  async function fastExport() {
+    const [rw, rh] = resSelect.value.split('x').map(Number);
+    const fps = parseInt(fpsSelect.value, 10);
+    const bps = Math.min(80e6, Math.round(10e6 * (rw * rh) / (1920 * 1080) * Math.max(1, fps / 30)));
+    const SR = 48000, CH = 2; // semua lagu diseragamkan ke 48kHz stereo
+
+    // pilih lokasi simpan DULU → video ditulis langsung ke disk sambil render,
+    // jadi RAM aman untuk video 60+ menit
+    const batch = batchChk.checked && playlist.length > 1;
+    const sanitize = s => s.replace(/[\\/:*?"<>|]/g, '');
+    let fileHandle = null, fileStream = null, dirHandle = null;
+    const defName = sanitize((playlist[0] ? playlist[0].name : 'playlist') +
+      (playlist.length > 1 ? ' +' + (playlist.length - 1) + ' lagu' : '') +
+      ' [' + resSelect.value + ' ' + fps + 'fps].mp4');
+    if (batch) {
+      // batch: pilih FOLDER sekali, tiap lagu jadi file mp4 sendiri di dalamnya
+      if (window.showDirectoryPicker) {
+        try {
+          dirHandle = await showDirectoryPicker({ mode: 'readwrite' });
+        } catch (e) {
+          if (e.name === 'AbortError') return; // user batal
+          dirHandle = null;
+        }
+      }
+      if (!dirHandle) {
+        const maxDur = Math.max(...playlist.map(t => t.duration || 240));
+        const estGB = maxDur * bps / 8 / 1e9;
+        if (estGB > 1.2 && !confirm(
+          'Pemilihan folder tidak tersedia; tiap video dirakit di memori lalu di-download satu per satu.\n' +
+          'Perkiraan video terbesar ~' + estGB.toFixed(1) + ' GB berisiko membuat tab kehabisan memori.\nLanjutkan?')) return;
+      }
+    } else {
+      if (window.showSaveFilePicker) {
+        try {
+          fileHandle = await showSaveFilePicker({
+            suggestedName: defName,
+            types: [{ description: 'Video MP4', accept: { 'video/mp4': ['.mp4'] } }]
+          });
+        } catch (e) {
+          if (e.name === 'AbortError') return; // user batal
+          fileHandle = null; // tak bisa pakai picker → mode memori
+        }
+      }
+      if (!fileHandle) {
+        const estGB = playlist.reduce((s, t) => s + (t.duration || 240), 0) * bps / 8 / 1e9;
+        if (estGB > 1.2 && !confirm(
+          'Penulisan langsung ke disk tidak tersedia; video dirakit di memori.\n' +
+          'Perkiraan ukuran ~' + estGB.toFixed(1) + ' GB berisiko membuat tab kehabisan memori.\nLanjutkan?')) return;
+      }
+    }
+
+    // cari codec H.264 yang sanggup di resolusi ini
+    const codecs = ['avc1.640036', 'avc1.640034', 'avc1.640033', 'avc1.640032', 'avc1.64002a', 'avc1.640028', 'avc1.4d0028', 'avc1.42e01f'];
+    let vCfg = null;
+    for (const codec of codecs) {
+      const base = { codec, width: rw, height: rh, bitrate: bps, framerate: fps };
+      // utamakan encoder hardware (jauh lebih cepat); fallback ke default
+      for (const cfg of [{ ...base, hardwareAcceleration: 'prefer-hardware' }, base]) {
+        try { if ((await VideoEncoder.isConfigSupported(cfg)).supported) { vCfg = cfg; break; } } catch (e) {}
+      }
+      if (vCfg) break;
+    }
+    if (!vCfg) {
+      alert('Encoder browser tidak mendukung H.264 di resolusi ' + resSelect.value + '. Coba resolusi yang lebih kecil.');
+      return;
+    }
+
+    const aCfg = { codec: 'mp4a.40.2', sampleRate: SR, numberOfChannels: CH, bitrate: 192000 };
+    let aacOk = false;
+    try { aacOk = (await AudioEncoder.isConfigSupported(aCfg)).supported; } catch (e) {}
+    if (!aacOk) { startExport(); return; }
+
+    initAudio();
+
+    // background video: di-render sinkron dgn timeline output lewat seek per frame
+    if (customBg === 'video' && bgVideo.readyState < 1) {
+      await new Promise(r => {
+        bgVideo.addEventListener('loadedmetadata', r, { once: true });
+        setTimeout(r, 1500);
+      });
+    }
+    const hasBgVid = customBg === 'video' && bgVideo.duration > 0;
+    if (hasBgVid) {
+      // frame pertama WAJIB siap sebelum encode dimulai — awal video jangan gelap
+      bgVideo.pause();
+      await seekBgVideo(0, 2000);
+      await waitBgVideoReady(2000);
+      // selama loop frame nanti video DIBIARKAN BERPUTAR (decode berjalan itu
+      // murah & mulus; seek per frame lambat → background beku/tersentak).
+      // play() dipanggil tepat sebelum loop frame tiap lagu — bukan di sini —
+      // agar tidak berputar sendirian selama fase persiapan audio.
+      bgVideo.playbackRate = 1;
+      bgPumpFresh = false;
+    }
+    let bgLastOutT = 0, bgLastWall = performance.now(), bgThrottle = false, bgPumpOn = false;
+    const bgEvery = Math.max(1, Math.round(fps / 4)); // cek sinkron bg ±4x/detik
+
+    // --- UI mode render ---
+    fastRendering = true;
+    cancelRender = false;
+    audio.pause();
+    hint.style.display = 'none';
+    panel.classList.add('hidden');
+    togglePanel.classList.add('show');
+    recBadge.classList.add('show');
+    recLabel.textContent = '⚡ RENDER';
+    recStop.textContent = '✕ Batal';
+    dlBtn.disabled = true;
+
+    const savedTitle = songTitle.value;
+    const chapterList = [];
+    let fallback = false, finished = false, batchFiles = 0;
+    try {
+      recCanvas = document.createElement('canvas');
+      recCanvas.width = rw;
+      recCanvas.height = rh;
+      recCtx = recCanvas.getContext('2d', { alpha: false, desynchronized: true });
+      const rotStep = 60 / fps;                          // samakan kecepatan putar dgn live 60Hz
+      const smoothK = 1 - Math.pow(0.88, 60 / fps);      // samakan kehalusan pulse bass
+
+      // "sink" = 1 file output (muxer + encoder). Mode biasa: 1 sink utk semua
+      // lagu; mode batch: 1 sink per lagu.
+      let muxer = null, venc = null, aenc = null, target = null, encErr = null;
+      let sinkName = '';
+      let gFrame = 0;    // penghitung frame video dlm sink aktif
+      let gSamples = 0;  // penghitung sampel audio @48k dlm sink aktif
+
+      async function openSink(name) {
+        sinkName = name;
+        encErr = null;
+        fileStream = null;
+        if (batch) {
+          if (dirHandle) {
+            fileStream = await (await dirHandle.getFileHandle(name, { create: true })).createWritable();
+          }
+        } else if (fileHandle) {
+          fileStream = await fileHandle.createWritable();
+        }
+        target = fileStream
+          ? new Mp4Muxer.FileSystemWritableFileStreamTarget(fileStream)
+          : new Mp4Muxer.ArrayBufferTarget();
+        muxer = new Mp4Muxer.Muxer({
+          target,
+          video: { codec: 'avc', width: rw, height: rh },
+          audio: { codec: 'aac', sampleRate: SR, numberOfChannels: CH },
+          fastStart: fileStream ? false : 'in-memory'
+        });
+        venc = new VideoEncoder({ output: (cnk, m) => muxer.addVideoChunk(cnk, m), error: e => { encErr = e; } });
+        venc.configure(vCfg);
+        aenc = new AudioEncoder({ output: (cnk, m) => muxer.addAudioChunk(cnk, m), error: e => { encErr = e; } });
+        aenc.configure(aCfg);
+        gFrame = 0;
+        gSamples = 0;
+        smoothBass = 0;
+        rotation = 0;
+        bgClock = 0;
+        particles = [];
+        firePs = [];
+      }
+
+      async function closeSink() {
+        await aenc.flush();
+        await venc.flush();
+        muxer.finalize();
+        if (fileStream) {
+          await fileStream.close();
+          fileStream = null;
+        } else {
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(new Blob([target.buffer], { type: 'video/mp4' }));
+          a.download = sinkName;
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+        }
+        try { venc.close(); } catch (e) {}
+        try { aenc.close(); } catch (e) {}
+        muxer = null;
+      }
+
+      async function abortSink() {
+        try { venc.close(); } catch (e) {}
+        try { aenc.close(); } catch (e) {}
+        if (fileStream) {
+          try { await fileStream.close(); } catch (e) {}
+          fileStream = null;
+          // file batch yang batal dibuang agar folder tidak berisi mp4 rusak
+          if (batch && dirHandle) { try { await dirHandle.removeEntry(sinkName); } catch (e) {} }
+        }
+        muxer = null;
+      }
+
+      if (!batch) await openSink(defName);
+
+      let doneOffset = 0; // detik video yg sudah selesai di file-file sebelumnya (batch)
+      let fileCount = 0;  // jumlah file batch yg sudah dibuat
+      const t0 = performance.now();
+
+      // rentang potong (opsional) pada timeline playlist penuh
+      const fullDur = playlist.reduce((s, t) => s + (t.duration || 0), 0);
+      const T0 = parseTime(trimStartIn.value) || 0;
+      const T1v = parseTime(trimEndIn.value);
+      const T1 = T1v == null ? Infinity : T1v;
+      const totalDurEst = fullDur ? Math.max(0, Math.min(T1, fullDur) - T0) : 0;
+
+      let srcTime = 0;         // posisi pada timeline playlist penuh (sumber)
+      let firstPortion = true; // potongan pertama tidak diberi fade-in
+
+      // proses SATU lagu pada satu waktu — decode → analisis → encode → buang
+      for (let ti = 0; ti < playlist.length && !cancelRender; ti++) {
+        const track = playlist[ti];
+        const metaDur = track.duration || 0;
+        // seluruh lagu di luar rentang potong → lewati tanpa decode
+        if (metaDur && (srcTime + metaDur <= T0 || srcTime >= T1)) { srcTime += metaDur; continue; }
+
+        recTime.textContent = 'decode lagu ' + (ti + 1) + '/' + playlist.length + '…';
+        await new Promise(r => setTimeout(r, 0));
+
+        let audioBuf;
+        try {
+          audioBuf = await audioCtx.decodeAudioData(await track.file.arrayBuffer());
+        } catch (e) {
+          console.warn('Lewati (tak bisa didecode):', track.name);
+          srcTime += metaDur;
+          continue;
+        }
+
+        const dur = audioBuf.duration;
+        const inA = Math.max(0, T0 - srcTime);   // awal potongan (detik di dalam lagu)
+        const inB = Math.min(dur, T1 - srcTime); // akhir potongan
+        srcTime += dur;
+        if (inB - inA < 0.05) continue;
+
+        // analisis spektrum per frame + resample ke 48k stereo, sekali jalan
+        const oac = new OfflineAudioContext(CH, Math.ceil(audioBuf.duration * SR), SR);
+        const osrc = oac.createBufferSource();
+        osrc.buffer = audioBuf;
+        const oan = oac.createAnalyser();
+        oan.fftSize = 512;
+        oan.smoothingTimeConstant = 0.82;
+        osrc.connect(oan);
+        oan.connect(oac.destination);
+        osrc.start();
+        const nFrames = Math.max(1, Math.floor(audioBuf.duration * fps));
+        const spectra = new Array(nFrames);
+        spectra[0] = new Uint8Array(oan.frequencyBinCount);
+        for (let f = 1; f < nFrames; f++) {
+          oac.suspend(f / fps).then(() => {
+            const arr = new Uint8Array(oan.frequencyBinCount);
+            oan.getByteFrequencyData(arr);
+            spectra[f] = arr;
+            oac.resume();
+          });
+        }
+        const rendered = await oac.startRendering();
+        audioBuf = null; // bebaskan memori decode
+
+        // ambil hanya bagian dalam rentang potong
+        const s0 = Math.floor(inA * SR);
+        const s1 = Math.min(rendered.length, Math.max(s0 + 1, Math.ceil(inB * SR)));
+        const segLen = s1 - s0;
+        const chan = [];
+        for (let cc = 0; cc < CH; cc++) chan.push(rendered.getChannelData(cc).slice(s0, s1));
+
+        // normalisasi volume: samakan RMS antar lagu (target ≈ -14 dBFS), jaga peak
+        let gain = 1;
+        if (normChk.checked) {
+          let sum = 0, peak = 0, cnt = 0;
+          for (const d of chan) {
+            for (let i = 0; i < d.length; i += 4) { // sampling tiap 4 sampel, cukup akurat
+              const sVal = d[i];
+              sum += sVal * sVal;
+              const a = Math.abs(sVal);
+              if (a > peak) peak = a;
+              cnt++;
+            }
+          }
+          const rms = Math.sqrt(sum / Math.max(1, cnt));
+          if (rms > 1e-4) gain = Math.min(0.2 / rms, peak > 0 ? 0.95 / peak : 4, 4);
+        }
+
+        // fade antar lagu: fade-in singkat (kecuali potongan pertama) + fade-out
+        // (mode batch: tiap file berdiri sendiri → tanpa fade-in)
+        const fadeIn = fadeChk.checked && !firstPortion && !batch ? Math.min(0.6 * SR, segLen >> 1) : 0;
+        const fadeOut = fadeChk.checked ? Math.min(1.5 * SR, segLen >> 1) : 0;
+        if (gain !== 1 || fadeIn || fadeOut) {
+          for (const d of chan) {
+            for (let i = 0; i < d.length; i++) {
+              let f = gain;
+              if (i < fadeIn) f *= i / fadeIn;
+              if (i >= segLen - fadeOut) f *= (segLen - i) / fadeOut;
+              d[i] *= f;
+            }
+          }
+        }
+        firstPortion = false;
+
+        if (batch) {
+          fileCount++;
+          await openSink(sanitize(String(fileCount).padStart(2, '0') + ' - ' + track.name +
+            ' [' + resSelect.value + ' ' + fps + 'fps].mp4'));
+        } else {
+          chapterList.push({ name: track.name, start: gSamples / SR });
+        }
+        songTitle.value = track.name; // judul di video ikut berganti
+        activeLyrics = track.lyrics || null;
+
+        // encode audio potongan ini (blok per detik)
+        for (let off = 0; off < segLen; off += SR) {
+          const len = Math.min(SR, segLen - off);
+          const planar = new Float32Array(len * CH);
+          for (let cc = 0; cc < CH; cc++) {
+            planar.set(chan[cc].subarray(off, off + len), cc * len);
+          }
+          const ad = new AudioData({
+            format: 'f32-planar',
+            sampleRate: SR,
+            numberOfFrames: len,
+            numberOfChannels: CH,
+            timestamp: Math.round((gSamples + off) / SR * 1e6),
+            data: planar
+          });
+          aenc.encode(ad);
+          ad.close();
+          if (encErr) throw encErr;
+        }
+        const trackStart = gSamples / SR;
+        gSamples += segLen;
+        const trackEnd = gSamples / SR;
+        await aenc.flush(); // jaga antrian audio tetap pendek
+
+        // render frame video utk potongan ini (clock global → A/V tetap sinkron)
+        if (hasBgVid) {
+          bgVideo.play().catch(() => {});
+          bgLastWall = performance.now(); // reset pengukur laju (fase audio ≠ render)
+          bgLastOutT = gFrame / fps;
+          // nyalakan pompa frame (fastRendering sudah aktif di titik ini;
+          // pompa berhenti sendiri saat render selesai/dibatalkan)
+          if (bgVideo.requestVideoFrameCallback && !bgPumpOn) {
+            bgPumpOn = true;
+            if (!bgPumpCv) {
+              bgPumpCv = document.createElement('canvas');
+              bgPumpCtx = bgPumpCv.getContext('2d');
+            }
+            bgPumpCv.width = bgVideo.videoWidth;
+            bgPumpCv.height = bgVideo.videoHeight;
+            const pump = () => {
+              if (!fastRendering) { bgPumpOn = false; return; }
+              try {
+                bgPumpCtx.drawImage(bgVideo, 0, 0);
+                bgPumpFresh = true;
+              } catch (e) {}
+              bgVideo.requestVideoFrameCallback(pump);
+            };
+            bgVideo.requestVideoFrameCallback(pump);
+          }
+        }
+        while (gFrame / fps < trackEnd - 1e-9 && !cancelRender) {
+          const tIn = inA + (gFrame / fps - trackStart); // posisi di dalam lagu asli
+          const idx = Math.min(nFrames - 1, Math.max(0, Math.floor(tIn * fps)));
+          frameData = spectra[idx] || frameData;
+          progCur = tIn;
+          progDur = dur;
+          bgClock = gFrame / fps; // jam slideshow deterministik pd timeline output
+          let bass = 0;
+          for (let i = 2; i < 24; i++) bass += frameData[i];
+          bass /= 22 * 255;
+          smoothBass += (bass - smoothBass) * smoothK;
+          updateParticles(rotStep);
+          if (hasBgVid && gFrame % bgEvery === 0) {
+            // video bg berputar sendiri; tiap ±¼ dtk kecepatan putarnya
+            // dikunci ke kecepatan render (plus koreksi drift proporsional).
+            // Seek hanya utk kasus ekstrem — seek per frame = biang lag.
+            const nowMs = performance.now();
+            const want = (gFrame / fps) % bgVideo.duration;
+            let err = bgVideo.currentTime - want; // + = video kedepanan
+            if (isFinite(bgVideo.duration)) {
+              // drift melingkar (loop-balik): ambil arah terpendek
+              if (err > bgVideo.duration / 2) err -= bgVideo.duration;
+              if (err < -bgVideo.duration / 2) err += bgVideo.duration;
+            }
+            if (Math.abs(err) > 1.5) {
+              bgVideo.pause();
+              await seekBgVideo(want, 1200);
+              await waitBgVideoReady(500);
+              bgVideo.play().catch(() => {});
+              bgLastOutT = gFrame / fps;
+              bgLastWall = performance.now();
+            } else {
+              const wallAdv = (nowMs - bgLastWall) / 1000;
+              if (wallAdv > 0.05) {
+                const R = (gFrame / fps - bgLastOutT) / wallAdv; // laju render vs realtime
+                const corr = Math.max(-0.5, Math.min(0.5, -err * 2)); // kejar drift ±50%
+                const rate = R * (1 + corr);
+                if (isFinite(rate) && rate > 0) {
+                  bgVideo.playbackRate = Math.max(0.0625, Math.min(16, rate));
+                }
+                bgThrottle = R > 14; // render terlalu cepat utk dikejar video → rem halus
+                bgLastOutT = gFrame / fps;
+                bgLastWall = nowMs;
+              }
+            }
+          }
+          renderScene(recCtx, rw, rh, true);
+          const vf = new VideoFrame(recCanvas, {
+            timestamp: Math.round(gFrame * 1e6 / fps),
+            duration: Math.round(1e6 / fps)
+          });
+          venc.encode(vf, { keyFrame: gFrame % (fps * 4) === 0 });
+          vf.close();
+          rotation += (0.0018 + smoothBass * 0.004) * rotStep;
+          gFrame++;
+          if (encErr) throw encErr;
+          // bg video: frame baru hanya dikirim ke canvas saat loop memberi jeda —
+          // tanpa yield per frame, background di output macet di ±6fps (lag)
+          if (hasBgVid) await microYield();
+          if (gFrame % 10 === 0) {
+            if (gFrame % 30 === 0) {
+              const doneSec = doneOffset + gFrame / fps;
+              const elapsed = (performance.now() - t0) / 1000;
+              const total = totalDurEst || doneSec;
+              const pct = Math.min(99, Math.round(doneSec / total * 100));
+              const eta = doneSec > 3 ? Math.max(0, elapsed * (total - doneSec) / doneSec) : 0;
+              recTime.textContent = 'Lagu ' + (ti + 1) + '/' + playlist.length + ' — ' + pct + '%' +
+                (eta ? ' — sisa ±' + fmt(eta) : '');
+            }
+            await microYield(); // beri jalan event UI (tombol batal) tanpa jeda timer
+            // render >14x realtime tak bisa dikejar video bg (rate maks 16x) —
+            // rem halus agar bg tetap sinkron; hanya aktif saat bg video dipakai
+            if (bgThrottle) await new Promise(r => setTimeout(r, 8));
+            while (venc.encodeQueueSize > 12) await new Promise(r => setTimeout(r, 5));
+          }
+        }
+        // jeda antar lagu (persiapan audio) — video bg jangan berputar sendirian
+        if (hasBgVid) bgVideo.pause();
+
+        // mode batch: file lagu ini selesai → tutup, lanjut lagu berikutnya
+        if (batch) {
+          if (cancelRender) {
+            await abortSink();
+          } else {
+            recTime.textContent = 'finalisasi file ' + fileCount + '…';
+            await new Promise(r => setTimeout(r, 0));
+            doneOffset += gFrame / fps;
+            await closeSink();
+            batchFiles++;
+          }
+        }
+      }
+
+      if (batch) {
+        finished = !cancelRender && fileCount > 0;
+      } else if (!cancelRender) {
+        recTime.textContent = 'finalisasi…';
+        await new Promise(r => setTimeout(r, 0));
+        await closeSink();
+        finished = true;
+      } else {
+        await abortSink();
+      }
+    } catch (err) {
+      console.error('Render cepat gagal:', err);
+      try { if (fileStream) await fileStream.close(); } catch (e) {}
+      fallback = true;
+    } finally {
+      songTitle.value = savedTitle;
+      activeLyrics = playlist[currentTrack] ? playlist[currentTrack].lyrics || null : null;
+      fastRendering = false;
+      if (customBg === 'video') {
+        bgVideo.playbackRate = 1;
+        bgVideo.play().catch(() => {});
+      }
+      recBadge.classList.remove('show');
+      recLabel.textContent = 'REC';
+      recStop.textContent = '⏹ Stop & Simpan';
+      dlBtn.disabled = false;
+    }
+    if (finished && batch) {
+      alert('✅ ' + batchFiles + ' video selesai' + (dirHandle ? ' — tersimpan di folder yang kamu pilih.' : ' — cek folder Downloads.'));
+    }
+    if (finished && chapterList.length) showChapters(chapterList);
+    if (fallback) {
+      alert('Render cepat gagal — beralih ke mode rekam real-time.');
+      startExport();
+    }
+  }
+
+  // ===== Timestamp / chapter YouTube =====
+  function showChapters(list) {
+    let txt = '';
+    for (const c of list) {
+      const s = Math.round(c.start);
+      const h = Math.floor(s / 3600);
+      const m = Math.floor((s % 3600) / 60);
+      const sec = s % 60;
+      txt += (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(sec).padStart(2, '0') + ' ' + c.name + '\n';
+    }
+    chText.value = txt.trim();
+    chaptersEl.classList.add('show');
+  }
+  chCopy.addEventListener('click', () => {
+    chText.select();
+    navigator.clipboard.writeText(chText.value).catch(() => document.execCommand('copy'));
+    chCopy.textContent = '✅ Tersalin';
+    setTimeout(() => { chCopy.textContent = '📋 Salin'; }, 1500);
+  });
+  chClose.addEventListener('click', () => chaptersEl.classList.remove('show'));
+
+  dlBtn.addEventListener('click', () => {
+    const ta = parseTime(trimStartIn.value) || 0;
+    const tb = parseTime(trimEndIn.value);
+    if (tb != null && tb <= ta) {
+      alert('Rentang potong tidak valid: "Selesai" harus lebih besar dari "Mulai".\nContoh isi: 1:30 (menit:detik) atau 90 (detik).');
+      return;
+    }
+    // kualitas otomatis: naikkan ke minimal 1080p (khusus 16:9) & 60fps
+    // agar hasil tajam dan gerakan halus; rasio vertikal/kotak tidak diubah
+    if (hqChk.checked) {
+      const [rw0, rh0] = resSelect.value.split('x').map(Number);
+      if (rw0 > rh0 && rw0 < 1920) resSelect.value = '1920x1080';
+      fpsSelect.value = '60';
+      saveSettings();
+    }
+    if (canFastExport()) {
+      fastExport();
+    } else {
+      if (batchChk.checked && playlist.length > 1) {
+        alert('Export per lagu butuh Chrome/Edge (WebCodecs). Di browser ini video diexport sebagai satu file gabungan.');
+      }
+      startExport();
+    }
+  });
+
+  // ===== Simpan thumbnail PNG (frame saat ini, resolusi penuh) =====
+  thumbBtn.addEventListener('click', () => {
+    const [rw, rh] = resSelect.value.split('x').map(Number);
+    const tc = document.createElement('canvas');
+    tc.width = rw;
+    tc.height = rh;
+    renderScene(tc.getContext('2d'), rw, rh, true);
+    tc.toBlob(blob => {
+      if (!blob) { alert('Gagal membuat thumbnail.'); return; }
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = ((songTitle.value.trim() || 'thumbnail').replace(/[\\/:*?"<>|]/g, '')) +
+        ' [thumbnail ' + rw + 'x' + rh + '].png';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    }, 'image/png');
+  });
+
+  // ===== Cek dukungan browser (sekali per sesi) =====
+  (function checkCompat() {
+    try { if (sessionStorage.getItem('mv-compat-dismissed')) return; } catch (e) {}
+    let msg = '';
+    if (!window.MediaRecorder && !(window.VideoEncoder && window.AudioEncoder)) {
+      msg = 'Browser ini tidak mendukung pembuatan video — tombol Download Video tidak akan berfungsi. Gunakan Chrome atau Edge terbaru.';
+    } else if (!(window.VideoEncoder && window.AudioEncoder && window.isSecureContext)) {
+      msg = 'Export MP4 cepat tidak tersedia di browser ini — Download memakai mode rekam real-time (video direkam sepanjang durasi lagu, kemungkinan berformat WebM). Untuk MP4 instan, gunakan Chrome atau Edge.';
+    }
+    if (!msg) return;
+    document.getElementById('compatMsg').textContent = '⚠️ ' + msg;
+    document.getElementById('compatNote').classList.add('show');
+    document.getElementById('compatClose').addEventListener('click', () => {
+      document.getElementById('compatNote').classList.remove('show');
+      try { sessionStorage.setItem('mv-compat-dismissed', '1'); } catch (e) {}
+    });
+  })();
+  recStop.addEventListener('click', () => {
+    if (fastRendering) cancelRender = true;
+    else stopExport();
+  });
+
+  audio.addEventListener('timeupdate', () => {
+    if (!recActive) return;
+    recTime.textContent = fmt(audio.currentTime) + ' / ' + fmt(audio.duration || 0);
+    // batas akhir potong utk rekam real-time (posisi global pada playlist)
+    if (rtTrimEnd < Infinity) {
+      let acc = 0;
+      for (let i = 0; i < currentTrack; i++) acc += playlist[i].duration || 0;
+      if (acc + audio.currentTime >= rtTrimEnd) {
+        audio.pause();
+        stopExport();
+      }
+    }
+  });
+
+  // ===== Simpan & muat pengaturan (localStorage) =====
+  const SETTINGS_KEY = 'mv-settings-v1';
+  const PRESETS_KEY = 'mv-presets-v1';
+
+  function collectSettings() {
+    return {
+      vizStyle: vizStyle.value,
+      vizColor: vizColor.value,
+      vizColor2: vizColor2.value,
+      vizSize: vizSize.value,
+      imgSize: imgSize.value,
+      bgBlur: bgBlur.value,
+      bgDim: bgDim.value,
+      res: resSelect.value,
+      fps: fpsSelect.value,
+      artist: artistName.value,
+      vol: vol.value,
+      shuffle: shuffle,
+      repeatMode: repeatMode,
+      showProg: showProg.checked,
+      norm: normChk.checked,
+      fade: fadeChk.checked,
+      firePos: firePos.value,
+      fireLen: fireLen.value,
+      wmSize: wmSize.value,
+      titleSize: titleSize.value,
+      artistSize: artistSize.value,
+      lyricsOn: lyricsChk.checked,
+      wm: wmChk.checked,
+      batch: batchChk.checked,
+      imgOn: imgChk.checked,
+      hq: hqChk.checked,
+      previewQ: previewQ.value,
+      pos: posCfg,
+      v: 2
+    };
+  }
+
+  function applySettings(s) {
+    if (!s) return;
+    if (s.vizStyle) vizStyle.value = s.vizStyle;
+    if (s.vizColor) vizColor.value = s.vizColor;
+    if (s.vizColor2) vizColor2.value = s.vizColor2;
+    if (s.vizSize) vizSize.value = s.vizSize;
+    if (s.imgSize) imgSize.value = s.imgSize;
+    if (s.bgBlur != null) bgBlur.value = s.bgBlur;
+    if (s.bgDim != null) bgDim.value = s.bgDim;
+    if (s.res) resSelect.value = s.res;
+    if (s.fps) fpsSelect.value = s.fps;
+    if (s.artist) artistName.value = s.artist;
+    if (s.vol != null) { vol.value = s.vol; audio.volume = parseFloat(s.vol); }
+    shuffle = !!s.shuffle;
+    shufBtn.classList.toggle('active', shuffle);
+    repeatMode = [0, 1, 2].includes(s.repeatMode) ? s.repeatMode : 0;
+    if (s.showProg != null) showProg.checked = !!s.showProg;
+    if (s.norm != null) normChk.checked = !!s.norm;
+    if (s.fade != null) fadeChk.checked = !!s.fade;
+    if (s.firePos) firePos.value = s.firePos;
+    if (s.fireLen) fireLen.value = s.fireLen;
+    if (s.wmSize) wmSize.value = s.wmSize;
+    if (s.titleSize) titleSize.value = s.titleSize;
+    if (s.artistSize) artistSize.value = s.artistSize;
+    if (s.lyricsOn != null) lyricsChk.checked = !!s.lyricsOn;
+    if (s.wm != null) wmChk.checked = !!s.wm;
+    if (s.batch != null) batchChk.checked = !!s.batch;
+    if (s.imgOn != null) imgChk.checked = !!s.imgOn;
+    if (s.hq != null) hqChk.checked = !!s.hq;
+    if (s.previewQ && [...previewQ.options].some(o => o.value === s.previewQ)) previewQ.value = s.previewQ;
+    posCfg = Object.assign({ img: null, wm: null, title: null, artist: null }, s.pos || {});
+    applyRepeatUI();
+    applyBgFilter();
+  }
+
+  function saveSettings() {
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(collectSettings())); } catch (e) {}
+  }
+
+  function loadSettings() {
+    let s;
+    try { s = JSON.parse(localStorage.getItem(SETTINGS_KEY)); } catch (e) {}
+    if (!s) return;
+    // migrasi v2: default lama bikin hasil gelap & patah-patah — perbarui
+    // hanya jika nilainya masih persis default lama (belum diubah user)
+    if (!s.v) {
+      if (s.bgDim == 50) s.bgDim = 30;
+      if (s.fps == 30) s.fps = 60;
+    }
+    applySettings(s);
+  }
+
+  // ===== Preset bernama =====
+  function loadPresets() {
+    try { return JSON.parse(localStorage.getItem(PRESETS_KEY)) || {}; } catch (e) { return {}; }
+  }
+  function storePresets(p) {
+    try { localStorage.setItem(PRESETS_KEY, JSON.stringify(p)); } catch (e) {}
+  }
+  function renderPresetUI(selected) {
+    const p = loadPresets();
+    presetSel.innerHTML = '';
+    const o0 = document.createElement('option');
+    o0.value = '';
+    o0.textContent = '— pilih preset —';
+    presetSel.appendChild(o0);
+    for (const name of Object.keys(p).sort()) {
+      const o = document.createElement('option');
+      o.value = name;
+      o.textContent = name;
+      presetSel.appendChild(o);
+    }
+    presetSel.value = selected || '';
+  }
+  presetSave.addEventListener('click', () => {
+    const name = (prompt('Nama preset:', presetSel.value || '') || '').trim();
+    if (!name) return;
+    const p = loadPresets();
+    p[name] = collectSettings();
+    storePresets(p);
+    renderPresetUI(name);
+  });
+  presetSel.addEventListener('change', () => {
+    const p = loadPresets();
+    if (presetSel.value && p[presetSel.value]) {
+      applySettings(p[presetSel.value]);
+      resetAutoIdx();
+      applyQuality();
+      saveSettings();
+    }
+  });
+  presetDel.addEventListener('click', () => {
+    const name = presetSel.value;
+    if (!name) return;
+    if (!confirm('Hapus preset "' + name + '"?')) return;
+    const p = loadPresets();
+    delete p[name];
+    storePresets(p);
+    renderPresetUI('');
+  });
+
+  for (const el of [vizStyle, vizColor, vizColor2, vizSize, imgSize, bgBlur, bgDim, resSelect, fpsSelect, artistName, vol, showProg, normChk, fadeChk, firePos, fireLen, wmSize, titleSize, artistSize, lyricsChk, wmChk, batchChk, imgChk, hqChk, previewQ]) {
+    el.addEventListener('change', saveSettings);
+    el.addEventListener('input', saveSettings);
+  }
+
+  previewQ.addEventListener('change', () => { resetAutoIdx(); applyQuality(); });
+
+  renderPresetUI();
+  loadSettings();
+  applyQuality();
+  draw();
+})();
+</script>
+</body>
+</html>

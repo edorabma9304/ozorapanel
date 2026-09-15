@@ -35,6 +35,9 @@ export const APP = {
   mockJedaMs: env.VITE_MOCK_JEDA_MS,
   /** Prefiks semua key localStorage — cegah tabrakan antar aplikasi di domain yang sama. */
   prefiksSimpanan: 'ozora_panel_',
+  /** Basis URL build (Vite `base`). Dipakai untuk menyusun jalur aset statis —
+   *  '/' di panel, './' pada build statis yang bisa dibuka dari subfolder. */
+  basis: import.meta.env.BASE_URL || '/',
 } as const
 
 export const KUNCI_SIMPANAN = {

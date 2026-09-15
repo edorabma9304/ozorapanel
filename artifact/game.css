@@ -1,0 +1,6 @@
+/* Gaya untuk build statis permainan.
+   Tailwind 4 hanya memindai berkas di bawah root Vite — untuk build ini root-nya
+   `artifact/`, jadi `@source` di bawah wajib ada supaya kelas yang dipakai di
+   `src/` (peta, panel, primitif UI) ikut ter-generate. */
+@import '../src/styles/globals.css';
+@source '../src';

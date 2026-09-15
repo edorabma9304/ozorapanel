@@ -20,3 +20,6 @@ credentials.*
 
 # Dibuat otomatis oleh @tanstack/router-plugin
 src/routeTree.gen.ts
+
+# Build statis permainan (pnpm game:build)
+dist-game/

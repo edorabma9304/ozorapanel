@@ -10,9 +10,11 @@
  * PNG), bukan warna antarmuka — karena itu ditulis heksadesimal, bukan token.
  */
 import { useSyncExternalStore, type ReactNode } from 'react'
+import { APP } from '@/config/app'
 import type { BentukPion, WarnaTim } from './tipe'
 
-export const DASAR_ASET = '/permainan/monopoli/'
+/** Relatif terhadap basis build supaya ikut benar pada build statis. */
+export const DASAR_ASET = `${APP.basis}permainan/monopoli/`
 
 export const WARNA_TIM_HEX: Record<WarnaTim, { nama: string; isi: string; gelap: string; terang: string }> = {
   merah: { nama: 'Merah', isi: '#e53935', gelap: '#9f1d1a', terang: '#ff7b6e' },

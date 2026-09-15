@@ -3,7 +3,7 @@ import {
   Activity, ArrowLeftRight, Archive, Banknote, Blocks, Bot, Boxes, Building2, Calendar,
   CalendarCheck, CalendarOff, ChartArea, ChartColumn, ChartLine, ChartNoAxesCombined, ChartPie,
   CircleCheckBig, CircleHelp, Component, Contact, CreditCard, File, FileText, FolderKanban,
-  FolderOpen, FormInput, Gauge, Globe, IdCard, Inbox, Kanban, KeyRound, Layers, LayoutDashboard,
+  FolderOpen, FormInput, Gamepad2, Gauge, Globe, IdCard, Inbox, Kanban, KeyRound, Layers, LayoutDashboard,
   LayoutList, ListChecks, ListTodo, Mail, Map, MessageCircle, Newspaper, NotepadText, Package,
   Palette, PiggyBank, Puzzle, Radar, Receipt, ReceiptText, Rocket, ScanLine, ScrollText,
   ServerCrash, Settings, ShieldCheck, ShieldHalf, ShoppingBag, ShoppingCart, SlidersHorizontal,
@@ -172,6 +172,12 @@ export const MENU: GrupMenu[] = [
       { judul: 'Donat & Pai', href: '/bagan/donat', icon: ChartPie, demo: true },
       { judul: 'Radar', href: '/bagan/radar', icon: Radar, demo: true },
       { judul: 'Campuran', href: '/bagan/campuran', icon: Activity, demo: true },
+    ],
+  },
+  {
+    judul: 'Permainan',
+    item: [
+      { judul: 'Jelajah Dunia', href: '/permainan/monopoli', icon: Gamepad2, lencana: 'Baru', warnaLencana: 'success' },
     ],
   },
   {

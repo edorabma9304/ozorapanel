@@ -11,9 +11,8 @@
  * - `artifact/main.tsx` (build statis untuk dibagikan)
  */
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { DeskripsiKartu, IsiKartu, JudulKartu, Kartu, KepalaKartu } from '@/components/ui/kartu'
+import { HudPapan } from './hud'
 import { GalatAksi, buatPermainan, langkah, papanDari, pemainAktif } from './mesin'
-import { LogPermainan, PanelAksi, PanelTim } from './panel'
 import { FormPengaturan } from './pengaturan'
 import { PetaDunia } from './peta'
 import { bacaPermainan, tulisPermainan } from './simpan'
@@ -22,24 +21,19 @@ import './monopoli.css'
 
 const JEDA_DADU_MS = 700
 
-/** Kendali yang dibutuhkan kepala halaman — tombol di luar papan. */
-export type KendaliPermainan = {
-  /** Permainan sedang berjalan? Kosong = masih di layar persiapan. */
-  berjalan: boolean
-  /** Kamera mengikuti pion yang bergerak. */
-  ikuti: boolean
-  setIkuti: (v: boolean) => void
-  permainanBaru: () => void
-}
-
-export function Permainan({ kepala }: { kepala?: (kendali: KendaliPermainan) => ReactNode }) {
+/**
+ * `kepala` hanya judul halaman. Seluruh kendali permainan berada di dalam
+ * papan supaya mata pemain tidak berpindah-pindah antara papan dan panel.
+ */
+export function Permainan({ kepala }: { kepala?: ReactNode }) {
   const [permainan, setPermainan] = useState<KeadaanPermainan | null>(bacaPermainan)
   const permainanRef = useRef(permainan)
   const [galat, setGalat] = useState<string | null>(null)
   const [posisiTampil, setPosisiTampil] = useState<Record<number, number>>({})
   const [daduBerputar, setDaduBerputar] = useState(false)
   const [petakDipilih, setPetakDipilih] = useState<number | null>(null)
-  const [ikuti, setIkuti] = useState(true)
+  // Bawaan: papan tampil utuh, karena panel kendali ada di tengahnya.
+  const [ikuti, setIkuti] = useState(false)
   const [fokus, setFokus] = useState<{ petak: number; kunci: number } | null>(null)
 
   // Satu-satunya tempat ref disinkronkan: efek ini berjalan sebelum handler
@@ -145,48 +139,32 @@ export function Permainan({ kepala }: { kepala?: (kendali: KendaliPermainan) => 
 
   return (
     <>
-      {kepala?.({ berjalan: permainan !== null, ikuti, setIkuti, permainanBaru })}
+      {kepala}
 
       {!permainan ? (
         <FormPengaturan onMulai={mulai} />
       ) : (
-        <>
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
-            <PetaDunia
+        <PetaDunia
+          permainan={permainan}
+          posisiTampil={posisiTampil}
+          petakDipilih={petakDipilih}
+          onPilihPetak={pilihPetak}
+          petakSorot={petakSorot}
+          fokus={fokus}
+          className="h-[min(88vw,calc(100dvh-160px))] min-h-[420px]"
+          hud={
+            <HudPapan
               permainan={permainan}
-              posisiTampil={posisiTampil}
+              onAksi={jalankan}
+              sibuk={Boolean(sibuk)}
+              galat={galat}
               petakDipilih={petakDipilih}
-              onPilihPetak={pilihPetak}
-              petakSorot={petakSorot}
-              daduBerputar={daduBerputar}
-              fokus={fokus}
-              className="h-[62vh] min-h-[460px] xl:h-[calc(100dvh-220px)]"
+              ikuti={ikuti}
+              setIkuti={setIkuti}
+              onPermainanBaru={permainanBaru}
             />
-            <div className="space-y-4 scrollbar-thin xl:max-h-[calc(100dvh-220px)] xl:overflow-y-auto xl:pr-1">
-              <PanelAksi
-                permainan={permainan}
-                onAksi={jalankan}
-                sibuk={Boolean(sibuk)}
-                galat={galat}
-                petakDipilih={petakDipilih}
-                onPermainanBaru={permainanBaru}
-              />
-              <PanelTim permainan={permainan} onAksi={jalankan} />
-            </div>
-          </div>
-
-          <Kartu>
-            <KepalaKartu>
-              <div>
-                <JudulKartu>Catatan permainan</JudulKartu>
-                <DeskripsiKartu>Peristiwa terbaru di atas. Warna titik menandai tim.</DeskripsiKartu>
-              </div>
-            </KepalaKartu>
-            <IsiKartu>
-              <LogPermainan permainan={permainan} />
-            </IsiKartu>
-          </Kartu>
-        </>
+          }
+        />
       )}
     </>
   )

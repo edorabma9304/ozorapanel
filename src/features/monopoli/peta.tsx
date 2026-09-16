@@ -8,12 +8,12 @@
  * - Bagian tengah papan menampilkan peta dunia kartun dengan pin wilayah
  *   tiap tim, tumpukan kartu, dadu, dan pot Parkir Bebas.
  */
-import { Crosshair, Minus, Plus, Scan } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as PointerEventReact } from 'react'
+import { Crosshair, Focus, Minus, Plus, Scan } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as PointerEventReact, type ReactNode } from 'react'
 import { Tombol } from '@/components/ui/tombol'
 import { cn } from '@/lib/utils'
 import {
-  Aset, BangunanCadangan, Dadu, IkonBintangCadangan, IkonDuniaCadangan, IkonMulaiCadangan, IkonPajakCadangan,
+  Aset, BangunanCadangan, IkonBintangCadangan, IkonMulaiCadangan, IkonPajakCadangan,
   IkonParkirCadangan, IkonPenjaraCadangan, IkonPesawatCadangan, IkonPetiCadangan, IkonTanyaCadangan, NAMA_ASET,
   PionCadangan, WARNA_TIM_HEX,
 } from './aset'
@@ -46,14 +46,15 @@ export type PropsPeta = {
   onPilihPetak: (id: number | null) => void
   /** Petak yang boleh diklik sebagai pilihan (mis. bandara tujuan). */
   petakSorot?: number[]
-  daduBerputar?: boolean
   /** Ubah nilai ini untuk memusatkan pandangan ke petak tertentu. */
   fokus?: { petak: number; kunci: number } | null
+  /** Panel kendali yang ditanam di lubang tengah papan. */
+  hud?: ReactNode
   className?: string
 }
 
 export function PetaDunia({
-  permainan, posisiTampil, petakDipilih, onPilihPetak, petakSorot = TANPA_SOROT, daduBerputar = false, fokus, className,
+  permainan, posisiTampil, petakDipilih, onPilihPetak, petakSorot = TANPA_SOROT, fokus, hud, className,
 }: PropsPeta) {
   const papan = papanDari(permainan)
   const svgRef = useRef<SVGSVGElement>(null)
@@ -220,7 +221,7 @@ export function PetaDunia({
         {/* Bingkai papan */}
         <rect x={-10} y={-10} width={papan.lebar + 20} height={papan.tinggi + 20} rx={22} fill="#f6e7c8" stroke={GARIS} strokeWidth={5} filter="url(#bayang)" />
 
-        <TengahPapan papan={papan} permainan={permainan} daduBerputar={daduBerputar} />
+        <TengahPapan papan={papan} permainan={permainan} hud={hud} />
 
         {papan.petak.map((petak) => (
           <GambarPetak
@@ -287,6 +288,17 @@ export function PetaDunia({
         </Tombol>
         <Tombol varian="hantu" ukuran="ikon-sm" aria-label="Tampilkan seluruh papan" onClick={() => tweenKe(penuh)}>
           <Scan />
+        </Tombol>
+        <Tombol
+          varian="hantu"
+          ukuran="ikon-sm"
+          aria-label="Perbesar ke panel tengah"
+          onClick={() => {
+            const sisi = papan.lebar - 2 * UKURAN_SUDUT
+            tweenKe({ x: UKURAN_SUDUT, y: UKURAN_SUDUT, w: sisi, h: sisi })
+          }}
+        >
+          <Focus />
         </Tombol>
         <Tombol
           varian="hantu"
@@ -507,120 +519,51 @@ const BENUA = [
   'M800 345 Q860 330 905 365 Q912 405 870 425 Q820 425 795 395 Q785 365 800 345 Z',
 ]
 
-function TengahPapan({ papan, permainan, daduBerputar }: { papan: Papan; permainan: Permainan; daduBerputar: boolean }) {
+/**
+ * Lubang tengah papan: peta dunia sebagai latar redup, lalu seluruh panel
+ * kendali permainan di atasnya. Panel digambar pada kanvas tetap 1000×1000
+ * lewat `<foreignObject>` dan diskalakan ke ukuran lubang, jadi tata letaknya
+ * sama untuk 2 tim maupun 8 tim.
+ */
+function TengahPapan({ papan, permainan, hud }: { papan: Papan; permainan: Permainan; hud: ReactNode }) {
   const C = UKURAN_SUDUT
-  const dalam = papan.lebar - 2 * C
-  const margin = 26
-  const kotak = { x: C + margin, y: C + margin, w: dalam - margin * 2, h: dalam - margin * 2 }
-  const [d1, d2] = permainan.dadu ?? [1, 1]
+  const margin = 16
+  const sisi = papan.lebar - 2 * C - margin * 2
+  const skala = sisi / 1000
 
   return (
-    <svg x={kotak.x} y={kotak.y} width={kotak.w} height={kotak.h} viewBox="0 0 1000 1000" preserveAspectRatio="xMidYMid meet" pointerEvents="none">
-      {/* Judul */}
-      <text x="500" y="72" textAnchor="middle" fontSize="64" fontWeight="900" fill={GARIS} letterSpacing="4">JELAJAH DUNIA</text>
-      <text x="500" y="106" textAnchor="middle" fontSize="20" fontWeight="700" fill="#5a6a85">
-        Papan {papan.petak.length} petak · {papan.jumlahTim} tim · putaran {permainan.giliran}
-      </text>
-
-      {/* Peta dunia kartun (1000×500) */}
-      <svg x="60" y="130" width="880" height="440" viewBox="0 0 1000 500">
-        <rect x="0" y="0" width="1000" height="500" rx="40" fill="#5ec1f7" stroke={GARIS} strokeWidth="6" />
-        <rect x="0" y="0" width="1000" height="500" rx="40" fill="url(#ombak)" />
-        {BENUA.map((d) => (
-          <path key={d} d={d} fill="#8bd47b" stroke={GARIS} strokeWidth="5" strokeLinejoin="round" />
-        ))}
-        {/* Jalur penerbangan */}
-        <path d="M250 200 Q500 40 780 200" fill="none" stroke="white" strokeWidth="4" strokeDasharray="14 10" opacity="0.8" />
-        <path d="M300 380 Q560 470 860 400" fill="none" stroke="white" strokeWidth="4" strokeDasharray="14 10" opacity="0.8" />
-        <g transform="translate(500 92) rotate(12)">
-          <IkonPesawatKecil />
+    <g transform={`translate(${C + margin} ${C + margin}) scale(${skala})`}>
+      {/* Latar: peta dunia dibuat pucat supaya panel di atasnya tetap terbaca. */}
+      <g pointerEvents="none">
+        <rect x={0} y={0} width={1000} height={1000} rx={26} fill="#d7ecfa" stroke={GARIS} strokeWidth={4} />
+        <rect x={0} y={0} width={1000} height={1000} rx={26} fill="url(#ombak)" opacity={0.5} />
+        <g transform="translate(0 250)" opacity={0.55}>
+          {BENUA.map((d) => (
+            <path key={d} d={d} fill="#bfe0ac" stroke="#8fb583" strokeWidth={4} strokeLinejoin="round" />
+          ))}
+          <path d="M250 200 Q500 40 780 200" fill="none" stroke="white" strokeWidth={5} strokeDasharray="14 10" />
+          <path d="M300 380 Q560 470 860 400" fill="none" stroke="white" strokeWidth={5} strokeDasharray="14 10" />
+          {papan.wilayah.map((w) => {
+            const [px, py] = PIN_WILAYAH[w.id]!
+            const tim = permainan.tim[w.timAsal]!
+            return (
+              <path
+                key={w.id}
+                d={`M${px} ${py} l-18 -28 a21 21 0 1 1 36 0 z`}
+                fill={WARNA_TIM_HEX[tim.warna].isi}
+                stroke={GARIS}
+                strokeWidth={3}
+                strokeLinejoin="round"
+                opacity={tim.gugur ? 0.35 : 0.9}
+              />
+            )
+          })}
         </g>
-        {/* Pin wilayah tiap tim */}
-        {papan.wilayah.map((w) => {
-          const [px, py] = PIN_WILAYAH[w.id]!
-          const tim = permainan.tim[w.timAsal]!
-          const warna = WARNA_TIM_HEX[tim.warna]
-          return (
-            <g key={w.id} className={tim.gugur ? 'opacity-40' : undefined}>
-              <path d={`M${px} ${py} l-22 -34 a26 26 0 1 1 44 0 z`} fill={warna.isi} stroke={GARIS} strokeWidth="4" strokeLinejoin="round" />
-              <circle cx={px} cy={py - 36} r="11" fill="white" stroke={GARIS} strokeWidth="3" />
-              <rect x={px - 78} y={py + 6} width="156" height="30" rx="15" fill="white" stroke={GARIS} strokeWidth="3" />
-              <text x={px} y={py + 27} textAnchor="middle" fontSize="18" fontWeight="800" fill={GARIS}>{w.nama}</text>
-              <text x={px} y={py + 54} textAnchor="middle" fontSize="15" fontWeight="700" fill={warna.gelap}>{tim.nama}</text>
-            </g>
-          )
-        })}
-      </svg>
-
-      {/* Tumpukan kartu */}
-      <g transform="translate(120 620)">
-        <TumpukanKartu nama={NAMA_ASET.kartuKesempatan} warna="#e91e63" label="KESEMPATAN" cadangan={<IkonTanyaCadangan />} />
-      </g>
-      <g transform="translate(330 620)">
-        <TumpukanKartu nama={NAMA_ASET.kartuHarta} warna="#1e88e5" label="HARTA KARUN" cadangan={<IkonPetiCadangan />} />
       </g>
 
-      {/* Dadu */}
-      <g transform="translate(560 640)">
-        <rect x="0" y="0" width="300" height="200" rx="26" fill="white" stroke={GARIS} strokeWidth="5" opacity="0.95" />
-        <text x="150" y="42" textAnchor="middle" fontSize="22" fontWeight="900" fill={GARIS}>DADU</text>
-        <Dadu nilai={d1} x={40} y={60} ukuran={100} berputar={daduBerputar} />
-        <Dadu nilai={d2} x={160} y={60} ukuran={100} berputar={daduBerputar} />
-        <text x="150" y="190" textAnchor="middle" fontSize="20" fontWeight="800" fill="#5a6a85">
-          {permainan.dadu ? `${d1} + ${d2} = ${d1 + d2}` : 'belum dilempar'}
-        </text>
-      </g>
-
-      {/* Pot parkir bebas */}
-      <g transform="translate(560 860)">
-        <rect x="0" y="0" width="300" height="90" rx="20" fill="#fff4c2" stroke={GARIS} strokeWidth="5" />
-        <Aset nama={NAMA_ASET.ikonBintang} x={16} y={13} lebar={64} tinggi={64} cadangan={<IkonBintangCadangan />} />
-        <text x="96" y="40" fontSize="20" fontWeight="800" fill={GARIS}>Pot Parkir Bebas</text>
-        <text x="96" y="72" fontSize="28" fontWeight="900" fill="#9c6400">${permainan.pot}</text>
-      </g>
-
-      {/* Bola dunia hiasan */}
-      <g transform="translate(120 860)">
-        <Aset nama={NAMA_ASET.ikonDunia} lebar={90} tinggi={90} cadangan={<IkonDuniaCadangan />} />
-        <text x="110" y="38" fontSize="18" fontWeight="800" fill={GARIS}>Kelompok warna lengkap</text>
-        <text x="110" y="62" fontSize="15" fontWeight="600" fill="#5a6a85">sewa ×2 dan boleh membangun.</text>
-        <text x="110" y="84" fontSize="15" fontWeight="600" fill="#5a6a85">Tuan rumah wilayah: sewa +25 %.</text>
-      </g>
-    </svg>
-  )
-}
-
-function IkonPesawatKecil() {
-  return (
-    <path
-      d="M-30 12 L0 -6 L-12 -28 L-4 -30 L14 -10 L32 -16 L34 -10 L20 2 L24 26 L18 28 L6 10 L-14 18 L-22 28 L-26 26 L-24 16 Z"
-      fill="white"
-      stroke={GARIS}
-      strokeWidth="3"
-      strokeLinejoin="round"
-    />
-  )
-}
-
-function TumpukanKartu({ nama, warna, label, cadangan }: { nama: string; warna: string; label: string; cadangan: React.ReactNode }) {
-  return (
-    <g>
-      {[16, 8, 0].map((geser) => (
-        <rect key={geser} x={geser} y={-geser} width="180" height="250" rx="18" fill={warna} stroke={GARIS} strokeWidth="5" opacity={geser === 0 ? 1 : 0.85} />
-      ))}
-      <Aset
-        nama={nama}
-        lebar={180}
-        tinggi={250}
-        cadangan={
-          <g>
-            <rect x="4" y="4" width="92" height="92" rx="8" fill="none" />
-            <svg x="20" y="14" width="60" height="60" viewBox="0 0 100 100">{cadangan}</svg>
-            <rect x="8" y="78" width="84" height="14" rx="7" fill="rgba(0,0,0,0.25)" />
-            <text x="50" y="88" textAnchor="middle" fontSize="8" fontWeight="900" fill="white">{label}</text>
-          </g>
-        }
-      />
+      <foreignObject x={0} y={0} width={1000} height={1000}>
+        {hud}
+      </foreignObject>
     </g>
   )
 }

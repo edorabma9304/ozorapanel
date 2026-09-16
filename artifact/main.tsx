@@ -3,7 +3,7 @@
  * sidebar panel, tanpa router, tanpa login. Dipakai untuk membagikan
  * permainan sebagai satu folder statis (lihat `pnpm game:build`).
  */
-import { Eye, EyeOff, Moon, RotateCcw, Sun } from 'lucide-react'
+import { Moon, Sun } from 'lucide-react'
 import { StrictMode, useCallback, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Tombol } from '@/components/ui/tombol'
@@ -54,45 +54,26 @@ function Aplikasi() {
   }, [])
 
   return (
-    <main className="mx-auto w-full max-w-[1600px] space-y-6 p-4 sm:p-6">
+    <main className="mx-auto w-full max-w-[1600px] space-y-4 p-3 sm:p-5">
       <Permainan
-        kepala={({ berjalan, ikuti, setIkuti, permainanBaru }) => (
-          <div className="relative overflow-hidden rounded-card border border-border bg-card px-5 py-5 shadow-soft sm:px-6">
-            <div
-              aria-hidden
-              className="pointer-events-none absolute -right-16 -top-24 size-64 rounded-full bg-primary-soft/70 blur-2xl"
-            />
-            <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h1 className="text-2xl font-bold tracking-tight">Jelajah Dunia</h1>
-                <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-                  Papan properti dimainkan per tim: dua pemain satu tim, uang pribadi dan kas bersama,
-                  papan membesar mengikuti jumlah tim.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {berjalan ? (
-                  <>
-                    <Tombol varian="garis" onClick={() => setIkuti(!ikuti)} aria-pressed={ikuti}>
-                      {ikuti ? <Eye /> : <EyeOff />} {ikuti ? 'Ikuti pion' : 'Pandangan bebas'}
-                    </Tombol>
-                    <Tombol varian="garis" onClick={permainanBaru}>
-                      <RotateCcw /> Permainan baru
-                    </Tombol>
-                  </>
-                ) : null}
-                <Tombol
-                  varian="garis"
-                  ukuran="ikon"
-                  onClick={ubahTema}
-                  aria-label={gelap ? 'Ganti ke mode terang' : 'Ganti ke mode gelap'}
-                >
-                  {gelap ? <Sun /> : <Moon />}
-                </Tombol>
-              </div>
+        kepala={
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Jelajah Dunia</h1>
+              <p className="text-sm text-muted-foreground">
+                Papan properti per tim. Semua kendali dan penjelasan ada di dalam papan.
+              </p>
             </div>
+            <Tombol
+              varian="garis"
+              ukuran="ikon"
+              onClick={ubahTema}
+              aria-label={gelap ? 'Ganti ke mode terang' : 'Ganti ke mode gelap'}
+            >
+              {gelap ? <Sun /> : <Moon />}
+            </Tombol>
           </div>
-        )}
+        }
       />
     </main>
   )

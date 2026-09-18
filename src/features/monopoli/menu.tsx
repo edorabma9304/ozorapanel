@@ -9,14 +9,15 @@
  * melayang di atas papan sebagai antarmuka biasa, jadi memakai token tema
  * seperti komponen lain.
  */
-import { BookOpen, ScrollText, Users, X } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { BookOpen, LogOut, Music, ScrollText, Users, Volume2, X } from 'lucide-react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { Lencana } from '@/components/ui/lencana'
 import { Tombol } from '@/components/ui/tombol'
 import { cn } from '@/lib/utils'
 import { WARNA_TIM_HEX } from './aset'
 import { anggotaTim, kekayaanTim, papanDari, pemainAktif } from './mesin'
 import { DENDA_PENJARA } from './papan'
+import { suara } from './suara'
 import type { Aksi, Permainan } from './tipe'
 
 const uang = (n: number) => `$${n.toLocaleString('id-ID')}`
@@ -27,13 +28,16 @@ const AMBANG_PERINGATAN = 0.6
 type Laci = 'tim' | 'catatan' | 'aturan'
 
 export function MenuPapan({
-  permainan, onAksi, onPermainanBaru,
+  permainan, onAksi, onPermainanBaru, onKeluar,
 }: {
   permainan: Permainan
   onAksi: (a: Aksi) => void
   onPermainanBaru: () => void
+  /** Tinggalkan papan tanpa menghapus permainan. */
+  onKeluar: () => void
 }) {
   const [buka, setBuka] = useState<Laci | null>(null)
+  const bunyi = useSyncExternalStore(suara.langganan, suara.cuplikan, suara.cuplikan)
 
   const tombol: Array<{ id: Laci; label: string; ikon: typeof Users }> = [
     { id: 'tim', label: 'Tim', ikon: Users },
@@ -56,6 +60,32 @@ export function MenuPapan({
             <Ikon /> {label}
           </Tombol>
         ))}
+        <div className="my-0.5 flex gap-1 border-y border-border py-1">
+          <Tombol
+            varian={bunyi.musik ? 'halus' : 'hantu'}
+            ukuran="ikon-sm"
+            aria-pressed={bunyi.musik}
+            aria-label={bunyi.musik ? 'Matikan musik' : 'Nyalakan musik'}
+            title="Musik latar"
+            onClick={() => suara.aturMusik(!bunyi.musik)}
+          >
+            <Music />
+          </Tombol>
+          <Tombol
+            varian={bunyi.efek ? 'halus' : 'hantu'}
+            ukuran="ikon-sm"
+            aria-pressed={bunyi.efek}
+            aria-label={bunyi.efek ? 'Matikan efek suara' : 'Nyalakan efek suara'}
+            title="Efek suara"
+            onClick={() => suara.aturEfek(!bunyi.efek)}
+          >
+            <Volume2 />
+          </Tombol>
+        </div>
+
+        <Tombol varian="hantu" ukuran="sm" onClick={onKeluar} className="justify-start">
+          <LogOut /> Keluar
+        </Tombol>
         <Tombol varian="hantu" ukuran="sm" onClick={onPermainanBaru} className="justify-start text-danger-kuat">
           Permainan baru
         </Tombol>
@@ -217,7 +247,7 @@ function Aturan({ permainan }: { permainan: Permainan }) {
  * Pemberitahuan singkat peristiwa terbaru. Menggantikan kolom catatan yang
  * dulu selalu terbuka: pemain cukup melirik, riwayat penuh ada di menu.
  */
-export function TosPeristiwa({ permainan }: { permainan: Permainan }) {
+export function TosPeristiwa({ permainan, tahan }: { permainan: Permainan; tahan?: boolean }) {
   const terbaru = permainan.log.at(-1)
   const urut = terbaru?.urut ?? 0
 
@@ -230,13 +260,15 @@ export function TosPeristiwa({ permainan }: { permainan: Permainan }) {
     setSembunyi(false)
   }
 
+  // Selama dadu bergulir pesan ditahan supaya hasil lemparan tidak bocor
+  // sebelum dadunya berhenti.
   useEffect(() => {
-    if (!urut) return
+    if (!urut || tahan) return
     const timer = setTimeout(() => setSembunyi(true), 4500)
     return () => clearTimeout(timer)
-  }, [urut])
+  }, [urut, tahan])
 
-  if (!terbaru || sembunyi) return null
+  if (!terbaru || sembunyi || tahan) return null
   const tampil = terbaru
   const tim = tampil.tim !== undefined ? permainan.tim[tampil.tim] : undefined
 

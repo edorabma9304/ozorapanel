@@ -1,5 +1,5 @@
 /** Layar persiapan: jumlah tim, nama, warna, dan target permainan. */
-import { Play, Shuffle } from 'lucide-react'
+import { Play, Shuffle, Undo2 } from 'lucide-react'
 import { useState } from 'react'
 import { Label, Masukan, PetunjukKolom } from '@/components/ui/masukan'
 import { Tombol } from '@/components/ui/tombol'
@@ -15,7 +15,14 @@ function benihAcak() {
   return Math.floor(Math.random() * 2 ** 31)
 }
 
-export function FormPengaturan({ onMulai }: { onMulai: (p: PengaturanPermainan) => void }) {
+export function FormPengaturan({
+  onMulai,
+  onLanjut,
+}: {
+  onMulai: (p: PengaturanPermainan) => void
+  /** Ada bila permainan yang ditinggalkan masih tersimpan. */
+  onLanjut?: () => void
+}) {
   const [jumlahTim, setJumlahTim] = useState(2)
   const [namaTim, setNamaTim] = useState<string[]>(NAMA_BAWAAN)
   const [warnaTim, setWarnaTim] = useState<WarnaTim[]>([...WARNA_TIM])
@@ -61,6 +68,18 @@ export function FormPengaturan({ onMulai }: { onMulai: (p: PengaturanPermainan) 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
       <div className="space-y-6">
+        {onLanjut ? (
+          <section className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-primary bg-primary-soft p-4 shadow-soft">
+            <div>
+              <p className="font-bold">Ada permainan yang belum selesai</p>
+              <p className="text-sm text-muted-foreground">Lanjutkan dari posisi terakhir, atau atur ulang di bawah untuk memulai yang baru.</p>
+            </div>
+            <Tombol onClick={onLanjut}>
+              <Undo2 /> Lanjutkan permainan
+            </Tombol>
+          </section>
+        ) : null}
+
         <section className="rounded-card border border-border bg-card p-5 shadow-soft">
           <h2 className="text-base font-bold">Jumlah tim</h2>
           <p className="mt-1 text-sm text-muted-foreground">

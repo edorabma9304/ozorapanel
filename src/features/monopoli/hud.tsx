@@ -107,15 +107,18 @@ export type PropsHud = {
   sibuk: boolean
   galat: string | null
   petakDipilih: number | null
+  /** Dadu sedang bergulir — kartu diredupkan supaya dadu jadi pusat perhatian. */
+  menggulir?: boolean
   onPermainanBaru: () => void
 }
 
 export function HudPapan(props: PropsHud) {
-  const { permainan, sibuk, galat } = props
+  const { permainan, sibuk, galat, menggulir } = props
   const pm = pemainAktif(permainan)
   const tim = permainan.tim[pm.tim]!
   const warna = WARNA_TIM_HEX[tim.warna]
-  const [d1, d2] = permainan.dadu ?? [0, 0]
+  // Selama dadu bergulir, hasilnya disembunyikan supaya tidak mendahului animasi.
+  const [d1, d2] = (sibuk ? null : permainan.dadu) ?? [0, 0]
   const selesai = permainan.fase.jenis === 'selesai'
 
   return (
@@ -137,6 +140,10 @@ export function HudPapan(props: PropsHud) {
           boxShadow: '0 12px 0 0 rgba(31,42,68,0.18)',
           color: TINTA,
           overflow: 'hidden',
+          opacity: menggulir ? 0.25 : 1,
+          transform: menggulir ? 'scale(0.97)' : undefined,
+          transition: 'opacity 200ms ease, transform 200ms ease',
+          pointerEvents: menggulir ? 'none' : undefined,
         }}
       >
         {/* Siapa yang bermain dan berapa uangnya */}
@@ -176,8 +183,8 @@ export function HudPapan(props: PropsHud) {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, padding: '12px 0', borderBottom: `3px solid ${TINTA}` }}>
             <MataDadu nilai={d1} berputar={sibuk} />
             <MataDadu nilai={d2} berputar={sibuk} />
-            <p style={{ fontSize: 24, fontWeight: 800, color: permainan.dadu ? TINTA : TINTA_LEMBUT }}>
-              {permainan.dadu ? `${d1} + ${d2} = ${d1 + d2}` : 'belum dilempar'}
+            <p style={{ fontSize: 24, fontWeight: 800, color: d1 ? TINTA : TINTA_LEMBUT }}>
+              {d1 ? `${d1} + ${d2} = ${d1 + d2}` : sibuk ? 'mengocok…' : 'belum dilempar'}
             </p>
           </div>
         ) : null}

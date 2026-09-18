@@ -55,3 +55,112 @@
     transition: none;
   }
 }
+
+/* ------------------------------------------------------------------ Dadu 3D
+   Kubus CSS: enam sisi diputar ke tempatnya, induknya yang berguling.
+   Ukuran sisi 96px, jadi tiap sisi digeser 48px dari pusat. */
+.monopoli-nampan {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  perspective: 900px;
+}
+
+.monopoli-dadu3d-bingkai {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  animation: monopoli-dadu-lompat 1150ms cubic-bezier(0.17, 0.86, 0.28, 1);
+}
+
+.monopoli-dadu3d {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+.monopoli-sisi {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template: repeat(3, 1fr) / repeat(3, 1fr);
+  place-items: center;
+  padding: 10px;
+  background: #fffdf6;
+  border: 4px solid #1f2a44;
+  border-radius: 18px;
+  box-shadow: inset 0 -6px 0 0 rgb(31 42 68 / 0.12);
+  backface-visibility: hidden;
+}
+
+.monopoli-sisi > span {
+  width: 15px;
+  height: 15px;
+  border-radius: 999px;
+  background: #1f2a44;
+}
+
+.monopoli-sisi-depan { transform: translateZ(48px); }
+.monopoli-sisi-belakang { transform: rotateY(180deg) translateZ(48px); }
+.monopoli-sisi-kanan { transform: rotateY(90deg) translateZ(48px); }
+.monopoli-sisi-kiri { transform: rotateY(-90deg) translateZ(48px); }
+.monopoli-sisi-atas { transform: rotateX(90deg) translateZ(48px); }
+.monopoli-sisi-bawah { transform: rotateX(-90deg) translateZ(48px); }
+
+.monopoli-dadu3d-bayang {
+  position: absolute;
+  left: 50%;
+  bottom: -26px;
+  width: 92px;
+  height: 18px;
+  translate: -50% 0;
+  border-radius: 999px;
+  background: rgb(15 40 70 / 0.3);
+  filter: blur(6px);
+  animation: monopoli-bayang-lompat 1150ms cubic-bezier(0.17, 0.86, 0.28, 1);
+}
+
+@keyframes monopoli-dadu-lompat {
+  0% { transform: translateY(-44px) scale(0.86); }
+  45% { transform: translateY(-64px) scale(1.04); }
+  75% { transform: translateY(6px) scale(0.98); }
+  100% { transform: none; }
+}
+
+@keyframes monopoli-bayang-lompat {
+  0%, 45% { opacity: 0.15; transform: scaleX(0.6); }
+  80% { opacity: 0.4; transform: scaleX(1.05); }
+  100% { opacity: 1; transform: none; }
+}
+
+.monopoli-dadu3d-total {
+  padding: 0.35rem 1.1rem;
+  border: 3px solid #1f2a44;
+  border-radius: 999px;
+  background: #fffdf6;
+  color: #1f2a44;
+  font-size: 1.4rem;
+  font-weight: 800;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 220ms ease, transform 220ms ease;
+}
+
+.monopoli-dadu3d-total.terlihat {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .monopoli-dadu3d-bingkai,
+  .monopoli-dadu3d-bayang {
+    animation: none;
+  }
+  .monopoli-dadu3d-total {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}

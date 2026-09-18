@@ -63,7 +63,10 @@ Papan properti terinspirasi Monopoly, dimainkan **per tim** (2 pemain/tim,
 | `aset.tsx` | pemuat PNG dari `public/permainan/monopoli/` + gambar SVG cadangan |
 | `peta.tsx` | papan SVG interaktif (geser, zoom, tooltip, pion beranimasi, peta dunia tengah) |
 | `hud.tsx` | panggung keputusan di lubang tengah papan — hanya fase yang sedang berjalan |
-| `menu.tsx` | menu pojok kiri (tim, catatan, aturan) + pemberitahuan peristiwa |
+| `menu.tsx` | menu pojok kiri (tim, catatan, aturan, suara, keluar) + pemberitahuan peristiwa |
+| `dadu.tsx` | dadu 3D (kubus CSS) yang bergulir sebelum pion berjalan |
+| `suara.ts` | musik latar & efek suara hasil sintesis Web Audio + pemetaan peristiwa |
+| `suara.test.ts` | 5 test pemetaan peristiwa ke bunyi |
 | `pengaturan.tsx` | layar persiapan |
 | `simpan.ts` | simpan/muat permainan di localStorage |
 
@@ -71,6 +74,15 @@ Papan properti terinspirasi Monopoly, dimainkan **per tim** (2 pemain/tim,
 catatan peristiwa, dan aturan ada di menu pojok kiri, dibuka saat dibutuhkan.
 Jangan kembalikan panel yang selalu terbuka: itu yang dulu membuat permainan
 terasa rumit.
+
+**Urutan lemparan.** Mesin menentukan mata dadu saat tombol ditekan, tetapi pion
+menunggu: `permainan.tsx` menahan fase `bergerak` selama dadu 3D bergulir, dan
+menahan bunyi serta pemberitahuan lain sampai dadunya berhenti supaya hasilnya
+tidak bocor lebih dulu.
+
+**Suara** disintesis, tanpa berkas audio, dengan alasan yang sama seperti gambar
+cadangan: permainan utuh tanpa menunggu aset. Sakelar musik dan efek ada di menu
+pojok kiri dan tersimpan di localStorage.
 
 Mesin tidak tahu apa-apa soal UI: animasi dadu dan langkah pion diatur rute
 (`src/routes/_app/permainan/monopoli.tsx`) lewat fase `bergerak` → aksi `tiba`.

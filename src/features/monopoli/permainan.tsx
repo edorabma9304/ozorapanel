@@ -11,16 +11,19 @@
  * - `artifact/main.tsx` (build statis untuk dibagikan)
  */
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { DURASI_GULIR_MS, LemparanDadu } from './dadu'
 import { HudPapan } from './hud'
 import { MenuPapan, TosPeristiwa } from './menu'
 import { GalatAksi, buatPermainan, langkah, papanDari, pemainAktif } from './mesin'
 import { FormPengaturan } from './pengaturan'
 import { PetaDunia } from './peta'
 import { bacaPermainan, tulisPermainan } from './simpan'
+import { efekDariPerubahan, suara } from './suara'
 import type { Aksi, PengaturanPermainan, Permainan as KeadaanPermainan } from './tipe'
 import './monopoli.css'
 
-const JEDA_DADU_MS = 700
+/** Dadu bergulir, lalu hasilnya sempat terbaca, baru pion berjalan. */
+const JEDA_DADU_MS = DURASI_GULIR_MS + 650
 
 /**
  * `kepala` hanya judul halaman. Seluruh kendali permainan berada di dalam
@@ -33,6 +36,9 @@ export function Permainan({ kepala }: { kepala?: ReactNode }) {
   const [posisiTampil, setPosisiTampil] = useState<Record<number, number>>({})
   const [daduBerputar, setDaduBerputar] = useState(false)
   const [petakDipilih, setPetakDipilih] = useState<number | null>(null)
+  const [lemparan, setLemparan] = useState<[number, number] | null>(null)
+  /** Keluar dari papan tanpa menghapus permainan — bisa dilanjutkan lagi. */
+  const [diMenu, setDiMenu] = useState(false)
   // Bawaan: papan tampil utuh, karena panel kendali ada di tengahnya.
   const [ikuti, setIkuti] = useState(false)
   const [fokus, setFokus] = useState<{ petak: number; kunci: number } | null>(null)
@@ -54,9 +60,20 @@ export function Permainan({ kepala }: { kepala?: ReactNode }) {
       setPermainan(baru)
       setGalat(null)
       if (baru.fase.jenis !== 'bergerak') setPosisiTampil({})
-      if (aksi.jenis === 'lempar' && baru.fase.jenis === 'bergerak') {
+
+      const efek = efekDariPerubahan(kini, baru)
+      if (aksi.jenis === 'lempar' && baru.dadu) {
+        // Dadu bergulir dulu; bunyi lain menyusul supaya tidak bertabrakan.
+        suara.efek('dadu')
+        setLemparan(baru.dadu)
         setDaduBerputar(true)
-        setTimeout(() => setDaduBerputar(false), JEDA_DADU_MS)
+        setTimeout(() => {
+          setDaduBerputar(false)
+          setLemparan(null)
+          for (const e of efek) suara.efek(e)
+        }, JEDA_DADU_MS)
+      } else {
+        for (const e of efek) suara.efek(e)
       }
     } catch (e) {
       setGalat(e instanceof GalatAksi ? e.message : 'Terjadi galat tak terduga. Muat ulang halaman bila berlanjut.')
@@ -86,6 +103,7 @@ export function Permainan({ kepala }: { kepala?: ReactNode }) {
       if (i < jalur.length) {
         const ke = jalur[i]!
         setPosisiTampil((m) => ({ ...m, [id]: ke }))
+        suara.efek('langkah')
         if (ikuti) setFokus({ petak: ke, kunci: Date.now() })
         i++
         timer = setTimeout(tik, jeda)
@@ -115,6 +133,12 @@ export function Permainan({ kepala }: { kepala?: ReactNode }) {
     setGalat(null)
     setPetakDipilih(null)
     setPosisiTampil({})
+    setDiMenu(false)
+  }
+
+  function pilihPetak(id: number | null) {
+    if (id !== null) suara.efek('klik')
+    setPetakDipilih(id)
   }
 
   function permainanBaru() {
@@ -125,19 +149,27 @@ export function Permainan({ kepala }: { kepala?: ReactNode }) {
   }
 
   const sibuk = daduBerputar || permainan?.fase.jenis === 'bergerak'
+  const diPapan = permainan !== null && !diMenu
+
+  // Musik hanya berjalan selama papan terbuka.
+  useEffect(() => {
+    if (!diPapan) return
+    suara.masukPermainan()
+    return () => suara.keluarPermainan()
+  }, [diPapan])
 
   return (
     <>
       {kepala}
 
-      {!permainan ? (
-        <FormPengaturan onMulai={mulai} />
+      {!diPapan ? (
+        <FormPengaturan onMulai={mulai} onLanjut={permainan ? () => setDiMenu(false) : undefined} />
       ) : (
         <PetaDunia
-          permainan={permainan}
+          permainan={permainan!}
           posisiTampil={posisiTampil}
           petakDipilih={petakDipilih}
-          onPilihPetak={setPetakDipilih}
+          onPilihPetak={pilihPetak}
           fokus={fokus}
           ikuti={ikuti}
           onUbahIkuti={setIkuti}
@@ -149,13 +181,20 @@ export function Permainan({ kepala }: { kepala?: ReactNode }) {
               sibuk={Boolean(sibuk)}
               galat={galat}
               petakDipilih={petakDipilih}
+              menggulir={daduBerputar}
               onPermainanBaru={permainanBaru}
             />
           }
           lapisan={
             <>
-              <MenuPapan permainan={permainan} onAksi={jalankan} onPermainanBaru={permainanBaru} />
-              <TosPeristiwa permainan={permainan} />
+              <MenuPapan
+                permainan={permainan}
+                onAksi={jalankan}
+                onPermainanBaru={permainanBaru}
+                onKeluar={() => setDiMenu(true)}
+              />
+              <TosPeristiwa permainan={permainan} tahan={daduBerputar} />
+              {lemparan ? <LemparanDadu nilai={lemparan} /> : null}
             </>
           }
         />

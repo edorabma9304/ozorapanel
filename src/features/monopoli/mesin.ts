@@ -155,11 +155,10 @@ export function sewaPetak(p: Permainan, id: number): number {
   if (!m) return 0
   if (adalahBandara(petak)) return SEWA_BANDARA[Math.min(jumlahBandaraTim(p, m.tim), 4) - 1]!
   if (!adalahProperti(petak)) return 0
-  let sewa = petak.sewaDasar * PENGALI_SEWA[m.tingkat]!
-  if (m.tingkat === 0 && kelompokLengkap(p, petak.kelompok, m.tim)) sewa *= 2
-  // Bonus tuan rumah: sewa di wilayah asal tim naik 25 %.
-  if (papan.wilayah[petak.wilayah]!.timAsal === m.tim) sewa = Math.round(sewa * 1.25)
-  return sewa
+  const sewa = petak.sewaDasar * PENGALI_SEWA[m.tingkat]!
+  // Kelompok warna penuh menggandakan sewa tanah kosong. Tidak ada pengali
+  // tersembunyi lain: pemain harus bisa menghitung sewa tanpa membuka aturan.
+  return m.tingkat === 0 && kelompokLengkap(p, petak.kelompok, m.tim) ? sewa * 2 : sewa
 }
 
 /** Alasan tidak boleh membangun, atau null bila boleh. */
@@ -351,12 +350,7 @@ function selesaikanPendaratan(p: Permainan, pemain: Pemain) {
         return
       }
       if (m.tim === pemain.tim) {
-        if (petak.jenis === 'bandara') {
-          catat(p, `${pemain.nama} tiba di ${petak.nama} milik sendiri — boleh terbang ke bandara lain.`, 'baik', pemain.tim)
-          p.fase = { jenis: 'terbang', dari: petak.id }
-          return
-        }
-        catat(p, `${pemain.nama} singgah di ${petak.nama}, kota milik tim sendiri.`, 'biasa', pemain.tim)
+        catat(p, `${pemain.nama} singgah di ${petak.nama}, milik tim sendiri.`, 'biasa', pemain.tim)
         p.fase = { jenis: 'aksi' }
         return
       }
@@ -579,19 +573,6 @@ export function langkah(sebelum: Permainan, aksi: Aksi): Permainan {
       }
       if (p.fase.jenis !== 'selesai') p.fase = { jenis: 'aksi' }
       if (tim.gugur) giliranBerikutnya(p)
-      return p
-    }
-
-    case 'terbang': {
-      const f = pastikanFase(p, 'terbang')
-      if (aksi.ke === null) {
-        p.fase = { jenis: 'aksi' }
-        return p
-      }
-      if (!papan.indeks.bandara.includes(aksi.ke) || aksi.ke === f.dari) throw new GalatAksi('Pilih bandara lain sebagai tujuan.')
-      catat(p, `${pemain.nama} terbang dari ${papan.petak[f.dari]!.nama} ke ${papan.petak[aksi.ke]!.nama}.`, 'baik', pemain.tim)
-      // Terbang tidak melewati Mulai (langkah 0 = tanpa gaji).
-      p.fase = { jenis: 'bergerak', dari: f.dari, ke: aksi.ke, langkah: 0 }
       return p
     }
 

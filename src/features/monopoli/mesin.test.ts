@@ -143,7 +143,7 @@ describe('mesin: properti & sewa', () => {
     expect(p.tim[1]!.kerugian).toBe(sewa)
   })
 
-  it('sewa: kelompok lengkap ×2, bonus tuan rumah ×1,25, dan pengali bangunan', () => {
+  it('sewa: kelompok lengkap ×2 dan pengali bangunan, tanpa pengali tersembunyi', () => {
     const p = buatPermainan(pengaturan(2))
     const papan = papanDari(p)
     const [a, b, c] = anggotaKelompok(papan, '1-a') // wilayah 1 = kampung halaman tim 1
@@ -154,9 +154,12 @@ describe('mesin: properti & sewa', () => {
     expect(sewaPetak(p, a!.id)).toBe(a!.sewaDasar * 2)
     p.milik[a!.id]!.tingkat = 4
     expect(sewaPetak(p, a!.id)).toBe(a!.sewaDasar * 45)
-    // Pindahkan kepemilikan ke tim 1 (tuan rumah wilayah 1).
+    // Wilayah asal tim tidak lagi menambah sewa — sewa harus bisa dihitung
+    // pemain tanpa membuka aturan.
+    p.milik[a!.id]!.tingkat = 0
+    const sebelum = sewaPetak(p, a!.id)
     for (const x of [a, b, c]) p.milik[x!.id] = { tim: 1, tingkat: 0 }
-    expect(sewaPetak(p, a!.id)).toBe(Math.round(a!.sewaDasar * 2 * 1.25))
+    expect(sewaPetak(p, a!.id)).toBe(sebelum)
   })
 
   it('sewa bandara naik menurut jumlah bandara yang dikuasai', () => {
@@ -168,18 +171,15 @@ describe('mesin: properti & sewa', () => {
     expect(sewaPetak(p, b1!)).toBe(50)
   })
 
-  it('mendarat di bandara sendiri membuka fase terbang tanpa gaji', () => {
+  it('mendarat di properti tim sendiri tidak menagih apa pun', () => {
     let p = buatPermainan(pengaturan(2))
-    const [b1, b2] = papanDari(p).indeks.bandara
-    p.milik[b1!] = { tim: 0, tingkat: 0 }
-    p = daratkan(p, b1!)
-    expect(p.fase).toEqual({ jenis: 'terbang', dari: b1 })
-    expect(() => langkah(p, { jenis: 'terbang', ke: b1! })).toThrow(GalatAksi)
-    p = langkah(p, { jenis: 'terbang', ke: b2! })
-    expect(p.fase).toEqual({ jenis: 'bergerak', dari: b1, ke: b2, langkah: 0 })
-    p = langkah(p, { jenis: 'tiba' })
-    expect(p.pemain[0]!.posisi).toBe(b2)
-    expect(p.fase.jenis).toBe('tawaran')
+    const papan = papanDari(p)
+    const bandara = papan.indeks.bandara[0]!
+    p.milik[bandara] = { tim: 0, tingkat: 0 }
+    p = daratkan(p, bandara)
+    expect(p.fase.jenis).toBe('aksi')
+    expect(p.pemain[0]!.uang).toBe(PENGATURAN_BAWAAN.uangPribadiAwal)
+    expect(p.tim[0]!.kerugian).toBe(0)
   })
 })
 
@@ -395,9 +395,6 @@ describe('mesin: petak spesial & kartu', () => {
         }
         case 'kartu':
           p = langkah(p, { jenis: 'terapkan-kartu' })
-          break
-        case 'terbang':
-          p = langkah(p, { jenis: 'terbang', ke: null })
           break
         case 'aksi':
           p = langkah(p, { jenis: 'akhiri-giliran' })

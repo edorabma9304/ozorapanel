@@ -24,7 +24,8 @@ Papan properti terinspirasi Monopoly, dimainkan **per tim** (2 pemain/tim,
 - 4 sudut: Mulai, Penjara, Parkir Bebas, Masuk Penjara. 4 bandara di tengah sisi.
 - Satu **wilayah** (Asia Tenggara, Asia Timur, Eropa, …) per tim, 8 petak:
   6 kota dalam 2 kelompok warna (3 kota) + 1 petak kartu + 1 petak pajak/bonus.
-  Wilayah ke-i adalah kampung halaman tim ke-i: sewa di sana +25 %.
+  Wilayah ke-i ditandai sebagai kampung halaman tim ke-i di peta tengah; ini
+  hanya penanda, tidak mengubah sewa.
 - Harga kota naik dari $60 (wilayah pertama) sampai $360 (wilayah terakhir).
 
 **Sewa & bangunan**
@@ -32,7 +33,11 @@ Papan properti terinspirasi Monopoly, dimainkan **per tim** (2 pemain/tim,
 - Tingkat: Rumah → Vila → Menara → Pencakar langit; pengali sewa 4× / 10× / 25× / 45×.
 - Bangun merata (beda tingkat dalam satu kelompok maks 1). Biaya = harga/2 per tingkat.
 - Bandara: sewa $25/$50/$100/$200 menurut jumlah bandara pemilik. Mendarat di
-  bandara sendiri = boleh terbang ke bandara lain (tanpa gaji).
+  properti tim sendiri tidak menagih apa pun.
+
+> Sewa sengaja hanya punya dua pengali: kelompok warna penuh (×2 untuk tanah
+> kosong) dan tingkat bangunan. Tidak ada bonus tersembunyi, supaya pemain bisa
+> menghitung sewa tanpa membuka aturan.
 
 **Petak spesial**
 - Pajak $100 masuk pot; Parkir Bebas mengambil seluruh pot ke kas tim.
@@ -57,9 +62,15 @@ Papan properti terinspirasi Monopoly, dimainkan **per tim** (2 pemain/tim,
 | `mesin.test.ts` | 29 test aturan |
 | `aset.tsx` | pemuat PNG dari `public/permainan/monopoli/` + gambar SVG cadangan |
 | `peta.tsx` | papan SVG interaktif (geser, zoom, tooltip, pion beranimasi, peta dunia tengah) |
-| `panel.tsx` | panel tim, panel aksi per fase, log |
+| `hud.tsx` | panggung keputusan di lubang tengah papan — hanya fase yang sedang berjalan |
+| `menu.tsx` | menu pojok kiri (tim, catatan, aturan) + pemberitahuan peristiwa |
 | `pengaturan.tsx` | layar persiapan |
 | `simpan.ts` | simpan/muat permainan di localStorage |
+
+**Aturan tampilan.** Papan tengah hanya memuat keputusan saat ini. Daftar tim,
+catatan peristiwa, dan aturan ada di menu pojok kiri, dibuka saat dibutuhkan.
+Jangan kembalikan panel yang selalu terbuka: itu yang dulu membuat permainan
+terasa rumit.
 
 Mesin tidak tahu apa-apa soal UI: animasi dadu dan langkah pion diatur rute
 (`src/routes/_app/permainan/monopoli.tsx`) lewat fase `bergerak` → aksi `tiba`.

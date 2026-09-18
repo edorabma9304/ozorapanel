@@ -12,6 +12,7 @@
  */
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { HudPapan } from './hud'
+import { MenuPapan, TosPeristiwa } from './menu'
 import { GalatAksi, buatPermainan, langkah, papanDari, pemainAktif } from './mesin'
 import { FormPengaturan } from './pengaturan'
 import { PetaDunia } from './peta'
@@ -124,18 +125,6 @@ export function Permainan({ kepala }: { kepala?: ReactNode }) {
   }
 
   const sibuk = daduBerputar || permainan?.fase.jenis === 'bergerak'
-  const petakSorot =
-    permainan?.fase.jenis === 'terbang'
-      ? papanDari(permainan).indeks.bandara.filter((id) => id !== (permainan.fase as { dari: number }).dari)
-      : []
-
-  function pilihPetak(id: number | null) {
-    if (id !== null && permainan?.fase.jenis === 'terbang' && petakSorot.includes(id)) {
-      jalankan({ jenis: 'terbang', ke: id })
-      return
-    }
-    setPetakDipilih(id)
-  }
 
   return (
     <>
@@ -148,9 +137,10 @@ export function Permainan({ kepala }: { kepala?: ReactNode }) {
           permainan={permainan}
           posisiTampil={posisiTampil}
           petakDipilih={petakDipilih}
-          onPilihPetak={pilihPetak}
-          petakSorot={petakSorot}
+          onPilihPetak={setPetakDipilih}
           fokus={fokus}
+          ikuti={ikuti}
+          onUbahIkuti={setIkuti}
           className="h-[min(88vw,calc(100dvh-160px))] min-h-[420px]"
           hud={
             <HudPapan
@@ -159,10 +149,14 @@ export function Permainan({ kepala }: { kepala?: ReactNode }) {
               sibuk={Boolean(sibuk)}
               galat={galat}
               petakDipilih={petakDipilih}
-              ikuti={ikuti}
-              setIkuti={setIkuti}
               onPermainanBaru={permainanBaru}
             />
+          }
+          lapisan={
+            <>
+              <MenuPapan permainan={permainan} onAksi={jalankan} onPermainanBaru={permainanBaru} />
+              <TosPeristiwa permainan={permainan} />
+            </>
           }
         />
       )}

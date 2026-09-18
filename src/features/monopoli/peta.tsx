@@ -8,7 +8,7 @@
  * - Bagian tengah papan menampilkan peta dunia kartun dengan pin wilayah
  *   tiap tim, tumpukan kartu, dadu, dan pot Parkir Bebas.
  */
-import { Crosshair, Focus, Minus, Plus, Scan } from 'lucide-react'
+import { Eye, EyeOff, Focus, Minus, Plus, Scan } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as PointerEventReact, type ReactNode } from 'react'
 import { Tombol } from '@/components/ui/tombol'
 import { cn } from '@/lib/utils'
@@ -36,7 +36,6 @@ const WARNA_PETAK: Partial<Record<Petak['jenis'], string>> = {
 }
 
 type KotakPandang = { x: number; y: number; w: number; h: number }
-const TANPA_SOROT: number[] = []
 
 export type PropsPeta = {
   permainan: Permainan
@@ -44,17 +43,20 @@ export type PropsPeta = {
   posisiTampil: Record<number, number>
   petakDipilih: number | null
   onPilihPetak: (id: number | null) => void
-  /** Petak yang boleh diklik sebagai pilihan (mis. bandara tujuan). */
-  petakSorot?: number[]
   /** Ubah nilai ini untuk memusatkan pandangan ke petak tertentu. */
   fokus?: { petak: number; kunci: number } | null
-  /** Panel kendali yang ditanam di lubang tengah papan. */
+  /** Panel keputusan yang ditanam di lubang tengah papan. */
   hud?: ReactNode
+  /** Menu & pemberitahuan yang melayang di atas papan (koordinat layar). */
+  lapisan?: ReactNode
+  /** Kamera mengikuti pion yang sedang berjalan. */
+  ikuti?: boolean
+  onUbahIkuti?: (v: boolean) => void
   className?: string
 }
 
 export function PetaDunia({
-  permainan, posisiTampil, petakDipilih, onPilihPetak, petakSorot = TANPA_SOROT, fokus, hud, className,
+  permainan, posisiTampil, petakDipilih, onPilihPetak, fokus, hud, lapisan, ikuti = false, onUbahIkuti, className,
 }: PropsPeta) {
   const papan = papanDari(permainan)
   const svgRef = useRef<SVGSVGElement>(null)
@@ -182,7 +184,6 @@ export function PetaDunia({
     return peta
   }, [permainan.pemain, permainan.tim, posisiTampil])
 
-  const sorot = new Set(petakSorot)
   const pemainAktif = permainan.pemain[permainan.pemainAktif]!
 
   return (
@@ -230,7 +231,6 @@ export function PetaDunia({
             papan={papan}
             permainan={permainan}
             dipilih={petakDipilih === petak.id}
-            disorot={sorot.has(petak.id)}
             onKlik={() => onPilihPetak(petak.id)}
             onMasuk={(e) => onMasukPetak(petak.id, e)}
             onKeluar={() => setTooltip(null)}
@@ -301,19 +301,17 @@ export function PetaDunia({
           <Focus />
         </Tombol>
         <Tombol
-          varian="hantu"
+          varian={ikuti ? 'halus' : 'hantu'}
           ukuran="ikon-sm"
-          aria-label="Pusatkan ke pion yang sedang bermain"
-          onClick={() => {
-            const p = papan.petak[posisiTampil[pemainAktif.id] ?? pemainAktif.posisi]!
-            const w = Math.min(penuh.w, 720)
-            const h = w * (penuh.h / penuh.w)
-            tweenKe({ x: p.x + p.lebar / 2 - w / 2, y: p.y + p.tinggi / 2 - h / 2, w, h })
-          }}
+          aria-label="Kamera mengikuti pion"
+          aria-pressed={ikuti}
+          onClick={() => onUbahIkuti?.(!ikuti)}
         >
-          <Crosshair />
+          {ikuti ? <Eye /> : <EyeOff />}
         </Tombol>
       </div>
+
+      {lapisan}
 
       {tooltip ? (
         <TooltipPetak
@@ -331,13 +329,12 @@ export function PetaDunia({
 
 // ------------------------------------------------------------------ Petak
 function GambarPetak({
-  petak, papan, permainan, dipilih, disorot, onKlik, onMasuk, onKeluar,
+  petak, papan, permainan, dipilih, onKlik, onMasuk, onKeluar,
 }: {
   petak: Petak
   papan: Papan
   permainan: Permainan
   dipilih: boolean
-  disorot: boolean
   onKlik: () => void
   onMasuk: (e: PointerEventReact<SVGGElement>) => void
   onKeluar: () => void
@@ -376,7 +373,7 @@ function GambarPetak({
 
   return (
     <g
-      className={cn('monopoli-petak cursor-pointer', disorot && 'monopoli-sorot')}
+      className="monopoli-petak cursor-pointer"
       onClick={(e) => {
         e.stopPropagation()
         onKlik()
@@ -410,11 +407,6 @@ function GambarPetak({
           <text x={tengahX} y={tengahY + 14} textAnchor="middle" fontSize={13} fontWeight={700} fill="#4b5563">
             ${petak.harga}
           </text>
-          {milik ? (
-            <text x={tengahX} y={tengahY + 32} textAnchor="middle" fontSize={10} fontWeight={700} fill={warnaPemilik!.gelap}>
-              sewa ${sewaPetak(permainan, petak.id)}
-            </text>
-          ) : null}
         </>
       ) : null}
 
@@ -494,9 +486,6 @@ function GambarPetak({
       {dipilih ? (
         <rect x={x - 3} y={y - 3} width={lebar + 6} height={tinggi + 6} rx={8} fill="none" stroke="#fff176" strokeWidth={5} pointerEvents="none" />
       ) : null}
-      {disorot ? (
-        <rect x={x - 3} y={y - 3} width={lebar + 6} height={tinggi + 6} rx={8} fill="none" stroke="#69f0ae" strokeWidth={5} pointerEvents="none" className="monopoli-denyut" />
-      ) : null}
     </g>
   )
 }
@@ -535,30 +524,43 @@ function TengahPapan({ papan, permainan, hud }: { papan: Papan; permainan: Perma
     <g transform={`translate(${C + margin} ${C + margin}) scale(${skala})`}>
       {/* Latar: peta dunia dibuat pucat supaya panel di atasnya tetap terbaca. */}
       <g pointerEvents="none">
-        <rect x={0} y={0} width={1000} height={1000} rx={26} fill="#d7ecfa" stroke={GARIS} strokeWidth={4} />
-        <rect x={0} y={0} width={1000} height={1000} rx={26} fill="url(#ombak)" opacity={0.5} />
-        <g transform="translate(0 250)" opacity={0.55}>
-          {BENUA.map((d) => (
-            <path key={d} d={d} fill="#bfe0ac" stroke="#8fb583" strokeWidth={4} strokeLinejoin="round" />
-          ))}
-          <path d="M250 200 Q500 40 780 200" fill="none" stroke="white" strokeWidth={5} strokeDasharray="14 10" />
-          <path d="M300 380 Q560 470 860 400" fill="none" stroke="white" strokeWidth={5} strokeDasharray="14 10" />
-          {papan.wilayah.map((w) => {
-            const [px, py] = PIN_WILAYAH[w.id]!
-            const tim = permainan.tim[w.timAsal]!
-            return (
-              <path
-                key={w.id}
-                d={`M${px} ${py} l-18 -28 a21 21 0 1 1 36 0 z`}
-                fill={WARNA_TIM_HEX[tim.warna].isi}
-                stroke={GARIS}
-                strokeWidth={3}
-                strokeLinejoin="round"
-                opacity={tim.gugur ? 0.35 : 0.9}
-              />
-            )
-          })}
+        <clipPath id="lubang-tengah">
+          <rect x={0} y={0} width={1000} height={1000} rx={26} />
+        </clipPath>
+        <g clipPath="url(#lubang-tengah)">
+          <rect x={0} y={0} width={1000} height={1000} fill="#cfe7fa" />
+          <rect x={0} y={0} width={1000} height={1000} fill="url(#ombak)" opacity={0.6} />
+          {/* Peta diperbesar dan dipusatkan supaya mengisi lubang; bagian yang
+              lewat tepi terpotong, seperti peta yang dibentang di atas meja. */}
+          <g transform="translate(500 500) scale(1.75) translate(-500 -250)">
+            {BENUA.map((d) => (
+              <path key={d} d={d} fill="#a9d894" stroke="#7aa86c" strokeWidth={4} strokeLinejoin="round" />
+            ))}
+            <path d="M250 200 Q500 40 780 200" fill="none" stroke="white" strokeWidth={6} strokeDasharray="16 12" opacity={0.75} />
+            <path d="M300 380 Q560 470 860 400" fill="none" stroke="white" strokeWidth={6} strokeDasharray="16 12" opacity={0.75} />
+            {papan.wilayah.map((w) => {
+              const [px, py] = PIN_WILAYAH[w.id]!
+              const tim = permainan.tim[w.timAsal]!
+              const warna = WARNA_TIM_HEX[tim.warna]
+              return (
+                <g key={w.id} opacity={tim.gugur ? 0.3 : 1}>
+                  <path
+                    d={`M${px} ${py} l-16 -25 a19 19 0 1 1 32 0 z`}
+                    fill={warna.isi}
+                    stroke={GARIS}
+                    strokeWidth={3}
+                    strokeLinejoin="round"
+                  />
+                  <circle cx={px} cy={py - 27} r={7} fill="white" stroke={GARIS} strokeWidth={2} />
+                  <text x={px} y={py + 20} textAnchor="middle" fontSize={17} fontWeight={800} fill={GARIS} opacity={0.85}>
+                    {tim.nama}
+                  </text>
+                </g>
+              )
+            })}
+          </g>
         </g>
+        <rect x={0} y={0} width={1000} height={1000} rx={26} fill="none" stroke={GARIS} strokeWidth={4} />
       </g>
 
       <foreignObject x={0} y={0} width={1000} height={1000}>

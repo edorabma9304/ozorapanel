@@ -131,7 +131,6 @@ export type Fase =
   | { jenis: 'bergerak'; dari: number; ke: number; langkah: number }
   | { jenis: 'tawaran'; petak: number }
   | { jenis: 'kartu'; kartu: Kartu }
-  | { jenis: 'terbang'; dari: number }
   | { jenis: 'aksi' }
   | { jenis: 'selesai'; pemenang: number | null; alasan: string }
 
@@ -184,7 +183,6 @@ export type Aksi =
   | { jenis: 'beli' }
   | { jenis: 'lewati' }
   | { jenis: 'terapkan-kartu' }
-  | { jenis: 'terbang'; ke: number | null }
   | { jenis: 'bangun'; petak: number }
   | { jenis: 'jual-bangunan'; petak: number }
   | { jenis: 'setor'; pemain: number; jumlah: number }

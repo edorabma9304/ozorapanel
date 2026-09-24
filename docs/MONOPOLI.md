@@ -64,7 +64,16 @@ Papan properti terinspirasi Monopoly, dimainkan **per tim** (2 pemain/tim,
 | `peta.tsx` | papan SVG interaktif (geser, zoom, tooltip, pion beranimasi, peta dunia tengah) |
 | `hud.tsx` | panggung keputusan di lubang tengah papan — hanya fase yang sedang berjalan |
 | `menu.tsx` | menu pojok kiri (tim, catatan, aturan, suara, keluar) + pemberitahuan peristiwa |
+| `arena.tsx` | papan berjalan: animasi, suara, kamera — dipakai mode satu layar & daring |
 | `dadu.tsx` | dadu 3D (kubus CSS) yang bergulir sebelum pion berjalan |
+| `ruang.ts` | bentuk data ruang daring: peserta, kursi, obrolan |
+| `mesin-ruang.ts` | reducer ruang + otorisasi kursi + penyaringan pandangan |
+| `mesin-ruang.test.ts` | 17 test lobi, otorisasi, dan obrolan |
+| `transport.ts` | antarmuka transport + jalur antar tab (BroadcastChannel) |
+| `transport-supabase.ts` | transport lintas perangkat (dimuat malas) |
+| `daring.tsx` | layar pilih, lobi, dan papan mode bersama |
+| `obrolan.tsx` | kotak obrolan: saluran semua & tim |
+| `jelajah-dunia.tsx` | pintu masuk: pilih satu layar atau main bersama |
 | `suara.ts` | musik latar & efek suara hasil sintesis Web Audio + pemetaan peristiwa |
 | `suara.test.ts` | 5 test pemetaan peristiwa ke bunyi |
 | `pengaturan.tsx` | layar persiapan |
@@ -87,3 +96,64 @@ pojok kiri dan tersimpan di localStorage.
 Mesin tidak tahu apa-apa soal UI: animasi dadu dan langkah pion diatur rute
 (`src/routes/_app/permainan/monopoli.tsx`) lewat fase `bergerak` → aksi `tiba`.
 Untuk mode daring, cukup jalankan `langkah()` di server dan siarkan `Permainan`.
+
+
+---
+
+## Mode bersama (daring)
+
+Semua orang online bersamaan, masuk lewat kode ruang lima huruf, tanpa perlu
+akun. Ada obrolan untuk semua dan untuk rekan setim.
+
+**Pembagian tanggung jawab**
+
+- `mesin.ts` tahu aturan permainan, tidak tahu apa pun soal pemain atau akun.
+- `mesin-ruang.ts` tahu siapa duduk di kursi mana dan menolak perintah yang
+  bukan haknya. Keduanya murni, jadi bisa dijalankan di browser maupun server.
+- `transport.ts` adalah satu-satunya seam ke backend. Mengganti backend berarti
+  menulis satu berkas transport.
+
+**Aturan otorisasi**
+
+| Perintah | Siapa yang boleh |
+|---|---|
+| atur, mulai, bubar | tuan rumah |
+| duduk, berdiri | peserta mana pun, kursi kosong |
+| aksi permainan biasa | pemegang kursi yang sedang giliran |
+| menyerah | anggota tim itu |
+| `tiba`, `terapkan-kartu` | siapa pun di ruang |
+| obrolan tim | peserta yang sudah punya kursi |
+
+`tiba` dan `terapkan-kartu` sengaja dibuka untuk semua karena tidak butuh
+keputusan. Kalau pemain yang sedang giliran menutup tabnya di tengah langkah,
+klien lain tetap bisa memajukan papan, jadi permainan tidak menggantung.
+
+**Rahasia bandar.** Benih PRNG dan urutan kartu ada di dalam keadaan permainan.
+`pandangan()` membuangnya sebelum keadaan dikirim ke pemain, dan juga menyaring
+obrolan tim lain. Transport apa pun WAJIB memakainya — tanpa itu pemain bisa
+meramalkan dadu dan mengintip kartu.
+
+**Memasang backend lintas perangkat**
+
+Tanpa backend, mode bersama hanya menyambung antar tab di browser yang sama
+(BroadcastChannel). Untuk lintas perangkat:
+
+```bash
+supabase db push                       # buat tabel + RLS
+pnpm edge:mesin                        # salin mesin ke dalam fungsi
+supabase functions deploy ruang        # pasang Edge Function
+```
+
+Lalu isi `VITE_SUPABASE_URL` dan `VITE_SUPABASE_ANON_KEY` di `.env.local`.
+Transport Supabase dimuat malas, jadi pustaka `@supabase/supabase-js` hanya
+diunduh kalau mode bersama benar-benar dibuka.
+
+Alur satu perubahan: klien mengirim perintah ke Edge Function, fungsi
+menjalankan `langkahRuang` dan menyimpan dengan kunci optimistik (`urut`), lalu
+menyiarkan nomor urut ke kanal Realtime. Klien yang mendengar mengambil
+pandangannya masing-masing. Yang disiarkan sengaja hanya nomor urut, karena isi
+ruang berbeda per penerima.
+
+Tabel `ruang_permainan` menyalakan RLS tanpa satu pun policy, jadi kunci anon
+tidak bisa menyentuhnya. Hanya Edge Function dengan service role yang bisa,
+dan di situlah otorisasi ditegakkan.

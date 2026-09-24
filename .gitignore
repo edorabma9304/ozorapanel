@@ -23,3 +23,6 @@ src/routeTree.gen.ts
 
 # Build statis permainan (pnpm game:build)
 dist-game/
+
+# Salinan mesin untuk Edge Function (pnpm edge:mesin)
+supabase/functions/ruang/mesin/

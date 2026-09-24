@@ -9,19 +9,34 @@ import { PENGATURAN_BAWAAN } from './mesin'
 import { TIM_MAKS, TIM_MIN, WILAYAH_DUNIA } from './papan'
 import { WARNA_TIM, type PengaturanPermainan, type WarnaTim } from './tipe'
 
-const NAMA_BAWAAN = ['Elang', 'Hiu', 'Harimau', 'Lebah', 'Naga', 'Rubah', 'Flamingo', 'Lumba-lumba']
+export const NAMA_BAWAAN = ['Elang', 'Hiu', 'Harimau', 'Lebah', 'Naga', 'Rubah', 'Flamingo', 'Lumba-lumba']
 
-function benihAcak() {
+export function benihAcak() {
   return Math.floor(Math.random() * 2 ** 31)
+}
+
+/** Pengaturan siap pakai untuk sejumlah tim — dipakai lobi daring. */
+export function pengaturanBawaan(jumlahTim: number): PengaturanPermainan {
+  return {
+    ...PENGATURAN_BAWAAN,
+    jumlahTim,
+    namaTim: NAMA_BAWAAN.slice(0, jumlahTim),
+    warnaTim: [...WARNA_TIM].slice(0, jumlahTim),
+    namaPemain: Array.from({ length: jumlahTim }, () => ['', '']),
+    benih: benihAcak(),
+  }
 }
 
 export function FormPengaturan({
   onMulai,
   onLanjut,
+  onGantiMode,
 }: {
   onMulai: (p: PengaturanPermainan) => void
   /** Ada bila permainan yang ditinggalkan masih tersimpan. */
   onLanjut?: () => void
+  /** Kembali ke pemilihan mode main. */
+  onGantiMode?: () => void
 }) {
   const [jumlahTim, setJumlahTim] = useState(2)
   const [namaTim, setNamaTim] = useState<string[]>(NAMA_BAWAAN)
@@ -216,6 +231,11 @@ export function FormPengaturan({
         <Tombol ukuran="lg" className="w-full" onClick={mulai} disabled={galatAngka !== null}>
           <Play /> Mulai permainan
         </Tombol>
+        {onGantiMode ? (
+          <Tombol varian="hantu" className="w-full" onClick={onGantiMode}>
+            Ganti mode main
+          </Tombol>
+        ) : null}
       </aside>
     </div>
   )

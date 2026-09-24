@@ -117,8 +117,8 @@ export function HudPapan(props: PropsHud) {
   const pm = pemainAktif(permainan)
   const tim = permainan.tim[pm.tim]!
   const warna = WARNA_TIM_HEX[tim.warna]
-  // Selama dadu bergulir, hasilnya disembunyikan supaya tidak mendahului animasi.
-  const [d1, d2] = (sibuk ? null : permainan.dadu) ?? [0, 0]
+  // Hasil disembunyikan hanya selama dadu bergulir, bukan selama pion berjalan.
+  const [d1, d2] = (menggulir ? null : permainan.dadu) ?? [0, 0]
   const selesai = permainan.fase.jenis === 'selesai'
 
   return (
@@ -181,10 +181,10 @@ export function HudPapan(props: PropsHud) {
         {/* Dadu hanya tampil sebelum & sesudah lemparan, bukan saat permainan usai */}
         {!selesai ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, padding: '12px 0', borderBottom: `3px solid ${TINTA}` }}>
-            <MataDadu nilai={d1} berputar={sibuk} />
-            <MataDadu nilai={d2} berputar={sibuk} />
+            <MataDadu nilai={d1} berputar={Boolean(menggulir)} />
+            <MataDadu nilai={d2} berputar={Boolean(menggulir)} />
             <p style={{ fontSize: 24, fontWeight: 800, color: d1 ? TINTA : TINTA_LEMBUT }}>
-              {d1 ? `${d1} + ${d2} = ${d1 + d2}` : sibuk ? 'mengocok…' : 'belum dilempar'}
+              {d1 ? `${d1} + ${d2} = ${d1 + d2}` : menggulir ? 'mengocok…' : 'belum dilempar'}
             </p>
           </div>
         ) : null}

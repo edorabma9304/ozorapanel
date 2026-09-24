@@ -1,17 +1,18 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { KepalaHalaman } from '@/components/layout/kepala-halaman'
-import { Permainan } from '@/features/monopoli/permainan'
+import { JelajahDunia } from '@/features/monopoli/jelajah-dunia'
 
 function HalamanMonopoli() {
   return (
-    <Permainan
+    <JelajahDunia
       kepala={
         <KepalaHalaman
           judul="Jelajah Dunia"
-          deskripsi="Papan properti gaya Monopoly yang dimainkan per tim. Seluruh kendali dan penjelasan ada di dalam papan."
+          deskripsi="Papan properti per tim. Main satu layar, atau bersama lewat kode ruang."
           remah={[{ label: 'Permainan' }, { label: 'Jelajah Dunia' }]}
         />
       }
+      catatanTransport="Mode bersama di build ini memakai jalur antar tab di browser yang sama. Untuk lintas perangkat, pasang transport Supabase (lihat docs/MONOPOLI.md)."
     />
   )
 }

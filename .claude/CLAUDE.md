@@ -90,7 +90,8 @@ src/
 │   ├── pengguna/       JALUR EMAS: skema Zod + form dialog
 │   ├── toko/           keranjang belanja (store modul + useSyncExternalStore)
 │   └── monopoli/       permainan papan per tim — mesin murni (mesin.ts) +
-│                       peta SVG interaktif; aturan lengkap di docs/MONOPOLI.md
+│                       peta SVG interaktif + mode daring lewat kode ruang
+│                       (mesin-ruang.ts + transport.ts); baca docs/MONOPOLI.md
 └── routes/             rute berbasis berkas (_app = wajib login, _auth = publik)
 ```
 

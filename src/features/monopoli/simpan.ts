@@ -9,7 +9,7 @@ export function bacaPermainan(): Permainan | null {
     const mentah = localStorage.getItem(KUNCI)
     if (!mentah) return null
     const data = JSON.parse(mentah) as Permainan
-    return data.versi === 1 ? data : null
+    return data.versi === 2 ? data : null
   } catch {
     return null
   }

@@ -7,7 +7,7 @@ import { Moon, Sun } from 'lucide-react'
 import { StrictMode, useCallback, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Tombol } from '@/components/ui/tombol'
-import { Permainan } from '@/features/monopoli/permainan'
+import { JelajahDunia } from '@/features/monopoli/jelajah-dunia'
 import './game.css'
 
 const KUNCI_TEMA = 'ozora_panel_tema'
@@ -55,13 +55,13 @@ function Aplikasi() {
 
   return (
     <main className="mx-auto w-full max-w-[1600px] space-y-4 p-3 sm:p-5">
-      <Permainan
+      <JelajahDunia
         kepala={
           <div className="flex items-center justify-between gap-3">
             <div>
               <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Jelajah Dunia</h1>
               <p className="text-sm text-muted-foreground">
-                Papan properti per tim. Semua kendali dan penjelasan ada di dalam papan.
+                Papan properti per tim. Main satu layar, atau bersama lewat kode ruang.
               </p>
             </div>
             <Tombol
@@ -74,6 +74,7 @@ function Aplikasi() {
             </Tombol>
           </div>
         }
+        catatanTransport="Di halaman ini mode bersama berjalan antar tab di browser yang sama. Untuk lintas perangkat perlu backend."
       />
     </main>
   )

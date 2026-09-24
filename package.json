@@ -20,7 +20,8 @@
     "demo:strip": "node scripts/strip-demo.mjs",
     "lint:fix": "oxlint --config .oxlintrc.json --fix src",
     "game:build": "vite build --config artifact/vite.config.ts",
-    "game:artifact": "pnpm game:build && node scripts/game-artifact.mjs"
+    "game:artifact": "pnpm game:build && node scripts/game-artifact.mjs",
+    "edge:mesin": "node scripts/edge-mesin.mjs"
   },
   "dependencies": {
     "@fontsource-variable/plus-jakarta-sans": "^5.3.0",

@@ -91,7 +91,7 @@ export function buatPermainan(pengaturan: PengaturanPermainan): Permainan {
     }
   }
   const p: Permainan = {
-    versi: 1,
+    versi: 2,
     pengaturan,
     tim,
     pemain,
@@ -100,6 +100,7 @@ export function buatPermainan(pengaturan: PengaturanPermainan): Permainan {
     pemainAktif: 0,
     fase: { jenis: 'lempar' },
     dadu: null,
+    lemparanKe: 0,
     kembarBeruntun: 0,
     pot: 0,
     tumpukan: { kesempatan: [], harta: [] },
@@ -110,6 +111,20 @@ export function buatPermainan(pengaturan: PengaturanPermainan): Permainan {
   p.tumpukan.harta = kocok(p, KARTU.filter((k) => k.jenis === 'harta').map((k) => k.id))
   catat(p, `Permainan dimulai dengan ${tim.length} tim. ${pemain[0]!.nama} melempar dadu lebih dulu.`, 'penting')
   return p
+}
+
+/**
+ * Salinan aman untuk disiarkan ke pemain. Benih PRNG dan urutan kartu adalah
+ * rahasia bandar: kalau ikut terkirim, pemain bisa menghitung dadu berikutnya
+ * dan mengintip kartu yang belum keluar.
+ */
+export function redaksi(p: Permainan): Permainan {
+  return { ...p, acak: 0, tumpukan: { kesempatan: [], harta: [] } }
+}
+
+/** Aksi yang tidak butuh keputusan pemain, jadi boleh dikirim siapa pun. */
+export function aksiMekanis(a: Aksi) {
+  return a.jenis === 'tiba' || a.jenis === 'terapkan-kartu'
 }
 
 // ------------------------------------------------------------------ Pembacaan
@@ -414,6 +429,7 @@ export function langkah(sebelum: Permainan, aksi: Aksi): Permainan {
       const d1 = acakBulat(p, 6)
       const d2 = acakBulat(p, 6)
       p.dadu = [d1, d2]
+      p.lemparanKe++
       const kembar = d1 === d2
       const total = d1 + d2
 

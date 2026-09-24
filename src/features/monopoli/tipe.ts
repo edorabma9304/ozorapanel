@@ -155,7 +155,7 @@ export type PengaturanPermainan = {
 }
 
 export type Permainan = {
-  versi: 1
+  versi: 2
   pengaturan: PengaturanPermainan
   tim: Tim[]
   pemain: Pemain[]
@@ -166,6 +166,9 @@ export type Permainan = {
   pemainAktif: number
   fase: Fase
   dadu: [number, number] | null
+  /** Naik tiap lemparan. Dua lemparan bernilai sama tetap terbedakan, jadi
+   *  klien tahu kapan harus menggulirkan dadu lagi. */
+  lemparanKe: number
   kembarBeruntun: number
   /** Uang pajak & denda terkumpul — diambil siapa pun yang mendarat di Parkir Bebas. */
   pot: number

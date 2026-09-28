@@ -29,7 +29,8 @@
     "typecheck:worker": "tsc --noEmit -p tsconfig.worker.json",
     "cf:build": "VITE_SERVER_RUANG=/api vite build --config artifact/vite.config.ts",
     "cf:dev": "pnpm cf:build && wrangler dev",
-    "cf:deploy": "pnpm cf:build && wrangler deploy"
+    "cf:deploy": "pnpm cf:build && wrangler deploy",
+    "game:satu": "pnpm game:build && node scripts/game-satu-berkas.mjs"
   },
   "dependencies": {
     "@fontsource-variable/plus-jakarta-sans": "^5.3.0",

@@ -9,9 +9,17 @@ import { Tombol } from '@/components/ui/tombol'
 import { PermainanDaring, type FabrikTransport } from './daring'
 import { Permainan } from './permainan'
 import { transportSiaran } from './transport'
+import { transportHttp } from './transport-http'
 
-/** Lintas perangkat hanya mungkin bila backend permainan sudah dipasang. */
-const LINTAS_PERANGKAT = Boolean(APP.supabase.url && APP.supabase.anonKey)
+/**
+ * Urutan pilihan transport untuk mode bersama:
+ * 1. server ruang sendiri (VITE_SERVER_RUANG) — dipakai build yang disajikan
+ *    oleh `server/ruang.ts`, mis. saat dibagikan lewat tunnel;
+ * 2. Supabase — pemasangan permanen;
+ * 3. BroadcastChannel — tanpa backend, hanya antar tab di browser yang sama.
+ */
+const SERVER_SENDIRI = Boolean(APP.serverRuang)
+const LINTAS_PERANGKAT = SERVER_SENDIRI || Boolean(APP.supabase.url && APP.supabase.anonKey)
 
 const CATATAN_SIARAN =
   'Backend permainan belum dipasang, jadi mode bersama di sini hanya menyambung antar tab di browser yang sama. Langkah memasangnya ada di docs/MONOPOLI.md.'
@@ -34,6 +42,11 @@ export function JelajahDunia({
 
   async function bukaDaring() {
     if (fabrik) {
+      setMode('daring')
+      return
+    }
+    if (SERVER_SENDIRI) {
+      setFabrik(() => transportHttp)
       setMode('daring')
       return
     }

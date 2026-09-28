@@ -24,5 +24,11 @@ src/routeTree.gen.ts
 # Build statis permainan (pnpm game:build)
 dist-game/
 
-# Salinan mesin untuk Edge Function (pnpm edge:mesin)
+# Salinan mesin untuk Edge Function (pnpm mesin:salin)
 supabase/functions/ruang/mesin/
+
+# Salinan mesin untuk server ruang (pnpm mesin:salin)
+server/mesin/
+
+# Keadaan lokal wrangler (pnpm cf:dev)
+.wrangler/

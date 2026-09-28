@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { GalatRuang, type PerintahRuang, type Ruang } from './ruang'
+import { GalatRuang, MAKS_PESERTA, type PerintahRuang, type Ruang } from './ruang'
 import { buatKode, buatRuang, langkahRuang, pandangan } from './mesin-ruang'
 import { PENGATURAN_BAWAAN } from './mesin'
 import type { PengaturanPermainan } from './tipe'
@@ -167,5 +167,33 @@ describe('pandangan', () => {
     const r = ruangSiap()
     const sesudah = kirim(r, 'tuan', { jenis: 'obrol', saluran: 'semua', teks: 'hai' })
     expect(sesudah.urut).toBe(r.urut + 1)
+  })
+})
+
+describe('penjagaan server terbuka', () => {
+  it('perintah yang tidak dikenal ditolak, bukan didiamkan', () => {
+    const r = ruangSiap()
+    // Klien usang mengirim perintah yang sudah tidak ada lagi. Kalau ini lolos,
+    // nomor urutnya tetap naik dan semua klien ikut menyegarkan tanpa alasan.
+    const usang = { jenis: 'terbang', petak: 3 } as unknown as PerintahRuang
+    expect(() => kirim(r, 'tuan', usang)).toThrow(GalatRuang)
+    expect(() => kirim(r, 'tuan', usang)).toThrow(/muat ulang/i)
+  })
+
+  it('jumlah peserta dibatasi supaya ruang tidak digelembungkan', () => {
+    let r = ruangSiap()
+    while (r.peserta.length < MAKS_PESERTA) {
+      r = kirim(r, `pen${r.peserta.length}`, { jenis: 'gabung', nama: 'Penonton' })
+    }
+    expect(() => kirim(r, 'satu-lagi', { jenis: 'gabung', nama: 'Telat' })).toThrow(/penuh/i)
+  })
+
+  it('peserta yang sudah ada tetap bisa memperbarui namanya saat ruang penuh', () => {
+    let r = ruangSiap()
+    while (r.peserta.length < MAKS_PESERTA) {
+      r = kirim(r, `pen${r.peserta.length}`, { jenis: 'gabung', nama: 'Penonton' })
+    }
+    r = kirim(r, 'tuan', { jenis: 'gabung', nama: 'Edo Baru' })
+    expect(r.peserta.find((x) => x.id === 'tuan')!.nama).toBe('Edo Baru')
   })
 })

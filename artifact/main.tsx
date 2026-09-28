@@ -74,7 +74,6 @@ function Aplikasi() {
             </Tombol>
           </div>
         }
-        catatanTransport="Di halaman ini mode bersama berjalan antar tab di browser yang sama. Untuk lintas perangkat perlu backend."
       />
     </main>
   )

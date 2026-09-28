@@ -19,6 +19,8 @@ ApexCharts (dimuat malas) · oxlint · Vitest
 | `pnpm lint` | oxlint |
 | `pnpm test` | Vitest |
 | `pnpm demo:strip` | Buang seluruh halaman peraga (sekali, saat memulai project baru) |
+| `pnpm cf:deploy` | Terbitkan permainan + server ruangnya sebagai satu Worker Cloudflare |
+| `pnpm game:bersama` | Permainan + server ruang Node di :5190, untuk dicoba sendiri |
 
 Driver `mock` berjalan tanpa jeda buatan. Setel `VITE_MOCK_JEDA_MS=300` di
 `.env.local` hanya bila ingin menguji tampilan skeleton dan keadaan memuat.
@@ -91,9 +93,17 @@ src/
 │   ├── toko/           keranjang belanja (store modul + useSyncExternalStore)
 │   └── monopoli/       permainan papan per tim — mesin murni (mesin.ts) +
 │                       peta SVG interaktif + mode daring lewat kode ruang
-│                       (mesin-ruang.ts + transport.ts); baca docs/MONOPOLI.md
+│                       (mesin-ruang.ts + transport*.ts); baca docs/MONOPOLI.md
 └── routes/             rute berbasis berkas (_app = wajib login, _auth = publik)
+
+worker/                 Worker Cloudflare: statis + ruang (Durable Object)
+server/                 server ruang Node, tanpa dependensi
+supabase/functions/     Edge Function ruang (jalur ketiga)
 ```
+
+Tiga jalur backend ruang itu memakai mesin yang sama dan bicara ke antarmuka
+`Transport` yang sama — pilih satu, jangan tulis aturan permainan dua kali.
+Modul mesin yang dipakai server harus tetap murni: tanpa DOM, tanpa alias `@/`.
 
 ## Menambah modul CRUD baru
 

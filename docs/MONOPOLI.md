@@ -133,14 +133,63 @@ klien lain tetap bisa memajukan papan, jadi permainan tidak menggantung.
 obrolan tim lain. Transport apa pun WAJIB memakainya — tanpa itu pemain bisa
 meramalkan dadu dan mengintip kartu.
 
-**Memasang backend lintas perangkat**
+## Memasang backend lintas perangkat
 
 Tanpa backend, mode bersama hanya menyambung antar tab di browser yang sama
-(BroadcastChannel). Untuk lintas perangkat:
+(BroadcastChannel). Ada tiga jalur untuk lintas perangkat, semuanya memakai
+mesin yang sama dan bicara ke antarmuka `Transport` yang sama.
+
+| Jalur | Transport | Cocok untuk |
+|---|---|---|
+| Worker Cloudflare | `transport-http.ts` | tautan permanen, satu deploy, paket gratis |
+| Server Node sendiri | `transport-http.ts` | satu VPS, atau mencoba di jaringan lokal |
+| Supabase | `transport-supabase.ts` | sudah memakai Supabase untuk hal lain |
+
+Klien memilih sendiri, dengan urutan: `VITE_SERVER_RUANG` → Supabase →
+BroadcastChannel (lihat `jelajah-dunia.tsx`).
+
+### 1. Worker Cloudflare (disarankan)
+
+Satu deploy menyajikan permainan sekaligus ruangnya, di satu URL.
+
+```bash
+pnpm dlx wrangler login   # sekali saja, membuka browser
+pnpm cf:deploy            # build + terbitkan
+```
+
+Hasilnya `https://jelajah-dunia.<subdomain>.workers.dev`. Ganti `name` di
+`wrangler.jsonc` kalau ingin nama lain. Untuk mencoba dulu di komputer sendiri
+dengan runtime Cloudflare asli: `pnpm cf:dev` lalu buka `:8787`.
+
+Satu ruang = satu Durable Object, dan Cloudflare menjamin hanya ada satu
+salinannya yang menjalankan perintah satu per satu — tepat untuk permainan
+bergiliran, dan itulah sebabnya tidak perlu kunci optimistik di sini.
+Keadaannya ditulis ke penyimpanan objek, jadi ruang selamat walau objeknya
+sempat ditidurkan.
+
+`run_worker_first: ["/api/*"]` di `wrangler.jsonc` wajib ada. Tanpa itu
+`/api/*` ikut dilayani sebagai berkas statis dan tidak pernah sampai ke Worker.
+
+### 2. Server Node sendiri
+
+Satu proses tanpa dependensi yang menyajikan `dist-game/` sekaligus ruangnya.
+
+```bash
+pnpm mesin:salin                          # salin mesin ke server/mesin/
+VITE_SERVER_RUANG=/api pnpm game:build    # build permainan
+pnpm game:server                          # jalan di :5190
+```
+
+Atau ketiganya sekaligus: `pnpm game:bersama`.
+
+Keadaan hanya di memori — server mati berarti ruang hilang. Itu memang
+pilihannya: permainan berlangsung satu duduk, bukan berhari-hari.
+
+### 3. Supabase
 
 ```bash
 supabase db push                       # buat tabel + RLS
-pnpm edge:mesin                        # salin mesin ke dalam fungsi
+pnpm mesin:salin                       # salin mesin ke dalam fungsi
 supabase functions deploy ruang        # pasang Edge Function
 ```
 
@@ -148,12 +197,23 @@ Lalu isi `VITE_SUPABASE_URL` dan `VITE_SUPABASE_ANON_KEY` di `.env.local`.
 Transport Supabase dimuat malas, jadi pustaka `@supabase/supabase-js` hanya
 diunduh kalau mode bersama benar-benar dibuka.
 
-Alur satu perubahan: klien mengirim perintah ke Edge Function, fungsi
-menjalankan `langkahRuang` dan menyimpan dengan kunci optimistik (`urut`), lalu
-menyiarkan nomor urut ke kanal Realtime. Klien yang mendengar mengambil
-pandangannya masing-masing. Yang disiarkan sengaja hanya nomor urut, karena isi
-ruang berbeda per penerima.
+Di sini beberapa contoh fungsi bisa berjalan bersamaan, jadi penyimpanannya
+memakai kunci optimistik pada kolom `urut`: tulis hanya bila nomor urut belum
+berubah sejak dibaca, dengan empat kali percobaan ulang.
 
 Tabel `ruang_permainan` menyalakan RLS tanpa satu pun policy, jadi kunci anon
 tidak bisa menyentuhnya. Hanya Edge Function dengan service role yang bisa,
 dan di situlah otorisasi ditegakkan.
+
+### Yang sama di ketiganya
+
+Alur satu perubahan selalu: klien mengirim perintah ke server, server
+menjalankan `langkahRuang`, lalu mengabarkan **nomor urut** terbaru. Klien yang
+mendengar mengambil pandangannya masing-masing lewat `lihat`.
+
+Yang dikabarkan sengaja hanya nomor urutnya, tidak pernah isi ruangnya: obrolan
+tim dan rahasia bandar berbeda per penerima, jadi satu siaran bersama pasti
+membocorkan sesuatu ke seseorang.
+
+Semuanya juga menjajaki ulang tiap 8 detik sebagai jaring pengaman, jadi satu
+kabar yang hilang tidak membuat papan tersangkut.

@@ -11,7 +11,7 @@
 import { GalatAksi, aksiMekanis, buatPermainan, langkah, redaksi } from './mesin'
 import { TIM_MAKS, TIM_MIN } from './papan'
 import {
-  GalatRuang, MAKS_HURUF_PESAN, MAKS_OBROLAN, PANJANG_KODE,
+  GalatRuang, MAKS_HURUF_PESAN, MAKS_OBROLAN, MAKS_PESERTA, PANJANG_KODE,
   type KonteksPerintah, type Kursi, type PerintahRuang, type Ruang,
   kursiPeserta, semuaKursiTerisi, timPeserta,
 } from './ruang'
@@ -90,6 +90,9 @@ export function langkahRuang(sebelum: Ruang, perintah: PerintahRuang, konteks: K
       if (pengirim) {
         pengirim.nama = namaBersih(perintah.nama, pengirim.nama)
         break
+      }
+      if (r.peserta.length >= MAKS_PESERTA) {
+        throw new GalatRuang(`Ruang sudah penuh (maksimal ${MAKS_PESERTA} orang). Buat ruang lain.`)
       }
       // Datang saat permainan sudah jalan dan kursi penuh: jadi penonton.
       r.peserta.push({ id: dari, nama: namaBersih(perintah.nama, `Pemain ${r.peserta.length + 1}`), terlihat: waktu })
@@ -202,6 +205,16 @@ export function langkahRuang(sebelum: Ruang, perintah: PerintahRuang, konteks: K
       wajibTuanRumah(r, dari)
       r.permainan = null
       break
+    }
+
+    default: {
+      // Menolak, bukan mengabaikan: perintah yang lolos diam-diam tetap
+      // menaikkan nomor urut, jadi satu klien usang bisa memaksa semua orang
+      // menyegarkan tanpa henti.
+      const takDikenal: never = perintah
+      throw new GalatRuang(
+        `Perintah "${(takDikenal as { jenis?: string }).jenis ?? '?'}" tidak dikenal. Muat ulang halaman supaya versi permainannya sama.`,
+      )
     }
   }
 

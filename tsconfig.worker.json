@@ -1,0 +1,28 @@
+/*
+ * Typecheck terpisah untuk Worker Cloudflare.
+ *
+ * Dipisah dari tsconfig.json karena lib DOM dan lib Workers punya tipe global
+ * yang bertabrakan (Request, Response, dan kawan-kawannya).
+ *
+ * Pakai: pnpm typecheck:worker
+ */
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["@cloudflare/workers-types"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["worker"]
+}

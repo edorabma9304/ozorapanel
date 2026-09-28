@@ -10,6 +10,9 @@ import type { Aksi, PengaturanPermainan, Permainan } from './tipe'
 export const PANJANG_KODE = 5
 export const MAKS_OBROLAN = 120
 export const MAKS_HURUF_PESAN = 300
+/** 8 tim = 16 kursi, sisanya penonton. Batas ini menjaga server yang terbuka
+ *  ke publik dari ruang yang digelembungkan tanpa batas. */
+export const MAKS_PESERTA = 24
 
 export type Peserta = {
   id: string

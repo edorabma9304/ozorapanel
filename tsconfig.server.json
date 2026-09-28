@@ -1,0 +1,30 @@
+/*
+ * Typecheck terpisah untuk server ruang.
+ *
+ * Tidak digabung ke tsconfig.json karena `server/mesin/` dibangkitkan oleh
+ * `pnpm mesin:salin` dan tidak ikut di-commit — kalau ikut di include utama,
+ * `pnpm typecheck` gagal di mesin yang baru meng-clone repo.
+ *
+ * Pakai: pnpm mesin:salin && pnpm typecheck:server
+ */
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["node"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "allowImportingTsExtensions": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["server"]
+}

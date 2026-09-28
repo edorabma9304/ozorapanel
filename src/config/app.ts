@@ -11,6 +11,9 @@ const skemaEnv = z.object({
   VITE_SUPABASE_URL: z.string().url().optional().or(z.literal('')),
   VITE_SUPABASE_ANON_KEY: z.string().optional().or(z.literal('')),
   VITE_API_BASE_URL: z.string().optional().or(z.literal('')),
+  /** Basis URL server ruang permainan, mis. '/api' bila disajikan oleh server
+   *  yang sama. Diisi hanya pada build yang memang punya server ruang. */
+  VITE_SERVER_RUANG: z.string().optional().or(z.literal('')),
   /** Jeda buatan driver mock (ms). Bawaan 0 — naikkan hanya saat ingin
    *  menguji tampilan skeleton dan keadaan memuat. */
   VITE_MOCK_JEDA_MS: z.coerce.number().int().min(0).max(5000).default(0),
@@ -32,6 +35,8 @@ export const APP = {
   driver: env.VITE_DATA_DRIVER,
   supabase: { url: env.VITE_SUPABASE_URL || '', anonKey: env.VITE_SUPABASE_ANON_KEY || '' },
   apiBaseUrl: env.VITE_API_BASE_URL || '',
+  /** Basis server ruang permainan; kosong berarti belum ada. */
+  serverRuang: env.VITE_SERVER_RUANG || '',
   mockJedaMs: env.VITE_MOCK_JEDA_MS,
   /** Prefiks semua key localStorage — cegah tabrakan antar aplikasi di domain yang sama. */
   prefiksSimpanan: 'ozora_panel_',

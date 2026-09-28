@@ -133,6 +133,28 @@ klien lain tetap bisa memajukan papan, jadi permainan tidak menggantung.
 obrolan tim lain. Transport apa pun WAJIB memakainya — tanpa itu pemain bisa
 meramalkan dadu dan mengintip kartu.
 
+## Menerbitkan ke GitHub Pages
+
+Cara tercepat memberi orang lain tautan, gratis dan tanpa akun tambahan:
+
+```bash
+pnpm game:terbit
+```
+
+Hasilnya ada di `https://<pengguna>.github.io/<repo>/`. GitHub menyalakan Pages
+sendiri begitu branch `gh-pages` muncul pertama kali; tidak perlu menyentuh
+Settings.
+
+Branch `gh-pages` hanya berisi hasil build dan ditimpa setiap penerbitan —
+jangan menyuntingnya langsung.
+
+Yang terbit adalah build statis, jadi **hanya mode satu layar**. Mode bersama
+lintas perangkat butuh server ruang; pilih salah satu jalur di bawah.
+
+Tersedia juga `pnpm game:satu`, yang menanam gaya, skrip, dan font ke dalam
+satu berkas HTML — bisa dikirim lewat pesan biasa dan dibuka dengan klik dua
+kali, tanpa server sama sekali.
+
 ## Memasang backend lintas perangkat
 
 Tanpa backend, mode bersama hanya menyambung antar tab di browser yang sama

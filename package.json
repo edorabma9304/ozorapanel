@@ -30,7 +30,8 @@
     "cf:build": "VITE_SERVER_RUANG=/api vite build --config artifact/vite.config.ts",
     "cf:dev": "pnpm cf:build && wrangler dev",
     "cf:deploy": "pnpm cf:build && wrangler deploy",
-    "game:satu": "pnpm game:build && node scripts/game-satu-berkas.mjs"
+    "game:satu": "pnpm game:build && node scripts/game-satu-berkas.mjs",
+    "game:terbit": "pnpm game:build && node scripts/game-satu-berkas.mjs && node scripts/terbitkan-pages.mjs"
   },
   "dependencies": {
     "@fontsource-variable/plus-jakarta-sans": "^5.3.0",

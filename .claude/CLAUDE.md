@@ -21,6 +21,8 @@ ApexCharts (dimuat malas) · oxlint · Vitest
 | `pnpm demo:strip` | Buang seluruh halaman peraga (sekali, saat memulai project baru) |
 | `pnpm cf:deploy` | Terbitkan permainan + server ruangnya sebagai satu Worker Cloudflare |
 | `pnpm game:bersama` | Permainan + server ruang Node di :5190, untuk dicoba sendiri |
+| `pnpm game:terbit` | Terbitkan permainan ke GitHub Pages (branch `gh-pages`, statis) |
+| `pnpm game:satu` | Permainan jadi satu berkas HTML, bisa dibuka tanpa server |
 
 Driver `mock` berjalan tanpa jeda buatan. Setel `VITE_MOCK_JEDA_MS=300` di
 `.env.local` hanya bila ingin menguji tampilan skeleton dan keadaan memuat.

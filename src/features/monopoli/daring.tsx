@@ -7,7 +7,7 @@
  * `langkahRuang`, bukan di sini; tombol yang dimatikan di layar hanya bantuan
  * tampilan.
  */
-import { Check, Copy, DoorOpen, LogIn, Play, Plus, Users } from 'lucide-react'
+import { Check, Copy, DoorOpen, LogIn, MonitorSmartphone, Play, Plus, Users } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Lencana } from '@/components/ui/lencana'
 import { Label, Masukan, PetunjukKolom } from '@/components/ui/masukan'
@@ -36,7 +36,7 @@ const KOSONG: Keadaan = { ruang: null, status: 'menyambung', galat: null }
 export function PermainanDaring({
   kepala,
   buatTransport = transportSiaran,
-  catatanTransport,
+  lintasPerangkat = true,
   onGantiMode,
 }: {
   kepala?: ReactNode
@@ -44,8 +44,13 @@ export function PermainanDaring({
   onGantiMode?: () => void
   /** Ganti ini untuk memakai backend lain. Bawaannya antar tab di satu browser. */
   buatTransport?: FabrikTransport
-  /** Keterangan kecil di layar pilih, mis. batasan transport yang dipakai. */
-  catatanTransport?: ReactNode
+  /**
+   * Apakah transport yang dipakai benar-benar menyeberang perangkat. Bila
+   * tidak, kode ruang hanya berlaku antar tab di browser yang sama, dan layar
+   * wajib mengatakannya — pemain yang membagikan kode ke temannya baru tahu
+   * setelah temannya gagal masuk, dan itu terlihat seperti kerusakan.
+   */
+  lintasPerangkat?: boolean
 }) {
   const [transport, setTransport] = useState<Transport | null>(null)
   const [keadaan, setKeadaan] = useState<Keadaan>(KOSONG)
@@ -82,8 +87,14 @@ export function PermainanDaring({
         {kepala}
         <LayarPilih
           onSambung={sambung}
-          galat={status === 'tidak-ada' ? 'Ruang dengan kode itu tidak ditemukan.' : null}
-          catatan={catatanTransport}
+          galat={
+            status === 'tidak-ada'
+              ? lintasPerangkat
+                ? 'Ruang dengan kode itu tidak ditemukan. Periksa lagi kodenya, atau minta tuan rumah membuat ruang baru.'
+                : 'Ruang dengan kode itu tidak ditemukan. Halaman ini belum punya server ruang, jadi kode hanya berlaku antar tab di browser yang sama — kode dari perangkat lain tidak akan pernah ketemu di sini.'
+              : null
+          }
+          lintasPerangkat={lintasPerangkat}
           onGantiMode={onGantiMode}
         />
       </>
@@ -105,7 +116,14 @@ export function PermainanDaring({
     return (
       <>
         {kepala}
-        <Lobi ruang={ruang} saya={transport.id} galat={galat} kirim={transport.kirim} onKeluar={keluar} />
+        <Lobi
+          ruang={ruang}
+          saya={transport.id}
+          galat={galat}
+          kirim={transport.kirim}
+          onKeluar={keluar}
+          lintasPerangkat={lintasPerangkat}
+        />
       </>
     )
   }
@@ -148,13 +166,35 @@ export function PermainanDaring({
   )
 }
 
+/**
+ * Peringatan yang muncul di layar pilih dan di lobi saat transport yang
+ * dipakai tidak menyeberang perangkat. Ditaruh tepat di sebelah kode ruang,
+ * karena di situlah orang menyalin kodenya untuk dikirim ke teman.
+ */
+function PeringatanSatuBrowser() {
+  return (
+    <div className="flex gap-3 rounded-card border border-warning/40 bg-warning-soft p-4">
+      <MonitorSmartphone className="mt-0.5 size-5 shrink-0 text-warning-kuat" aria-hidden />
+      <div className="text-sm">
+        <p className="font-bold text-warning-kuat">Kode ini hanya berlaku di browser ini</p>
+        <p className="mt-1 text-warning-kuat/90">
+          Halaman ini belum punya server ruang, jadi kode hanya menyambungkan tab
+          lain di browser yang sama. Teman di HP atau komputer lain akan melihat
+          &ldquo;ruang tidak ditemukan&rdquo;. Untuk main lintas perangkat, server
+          ruangnya harus dipasang dulu — langkahnya ada di docs/MONOPOLI.md.
+        </p>
+      </div>
+    </div>
+  )
+}
+
 // ------------------------------------------------------------------ Layar pilih
 function LayarPilih({
-  onSambung, galat, catatan, onGantiMode,
+  onSambung, galat, lintasPerangkat, onGantiMode,
 }: {
   onSambung: (o: { kode: string; nama: string; pengaturan?: PengaturanPermainan }) => void
   galat: string | null
-  catatan?: ReactNode
+  lintasPerangkat: boolean
   onGantiMode?: () => void
 }) {
   const [nama, setNama] = useState('')
@@ -163,6 +203,8 @@ function LayarPilih({
 
   return (
     <div className="mx-auto grid w-full max-w-3xl gap-4 sm:grid-cols-2">
+      {lintasPerangkat ? null : <div className="sm:col-span-2"><PeringatanSatuBrowser /></div>}
+
       <section className="sm:col-span-2 rounded-card border border-border bg-card p-5 shadow-soft">
         <Label htmlFor="nama-pemain">Nama Anda</Label>
         <Masukan
@@ -173,7 +215,6 @@ function LayarPilih({
           maxLength={24}
           className="mt-1"
         />
-        {catatan ? <PetunjukKolom>{catatan}</PetunjukKolom> : null}
       </section>
 
       <section className="rounded-card border border-border bg-card p-5 shadow-soft">
@@ -181,7 +222,9 @@ function LayarPilih({
           <Plus className="size-4" /> Buat ruang
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Anda jadi tuan rumah. Bagikan kode yang muncul supaya teman bisa bergabung.
+          {lintasPerangkat
+            ? 'Anda jadi tuan rumah. Bagikan kode yang muncul supaya teman bisa bergabung.'
+            : 'Anda jadi tuan rumah. Kode yang muncul hanya bisa dipakai tab lain di browser ini.'}
         </p>
         <Tombol
           className="mt-4 w-full"
@@ -227,13 +270,14 @@ function LayarPilih({
 
 // ------------------------------------------------------------------ Lobi
 function Lobi({
-  ruang, saya, galat, kirim, onKeluar,
+  ruang, saya, galat, kirim, onKeluar, lintasPerangkat,
 }: {
   ruang: Ruang
   saya: string
   galat: string | null
   kirim: Transport['kirim']
   onKeluar: () => void
+  lintasPerangkat: boolean
 }) {
   const tuanRumah = ruang.tuanRumah === saya
   const siap = semuaKursiTerisi(ruang)
@@ -278,6 +322,8 @@ function Lobi({
             </Tombol>
           </div>
         </section>
+
+        {lintasPerangkat ? null : <PeringatanSatuBrowser />}
 
         {tuanRumah ? (
           <section className="rounded-card border border-border bg-card p-5 shadow-soft">

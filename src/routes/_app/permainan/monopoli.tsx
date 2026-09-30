@@ -12,7 +12,6 @@ function HalamanMonopoli() {
           remah={[{ label: 'Permainan' }, { label: 'Jelajah Dunia' }]}
         />
       }
-      catatanTransport="Mode bersama di build ini memakai jalur antar tab di browser yang sama. Untuk lintas perangkat, pasang transport Supabase (lihat docs/MONOPOLI.md)."
     />
   )
 }

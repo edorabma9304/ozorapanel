@@ -21,20 +21,15 @@ import { transportHttp } from './transport-http'
 const SERVER_SENDIRI = Boolean(APP.serverRuang)
 const LINTAS_PERANGKAT = SERVER_SENDIRI || Boolean(APP.supabase.url && APP.supabase.anonKey)
 
-const CATATAN_SIARAN =
-  'Backend permainan belum dipasang, jadi mode bersama di sini hanya menyambung antar tab di browser yang sama. Langkah memasangnya ada di docs/MONOPOLI.md.'
-
 type Mode = 'pilih' | 'lokal' | 'daring'
 
 export function JelajahDunia({
   kepala,
   buatTransport,
-  catatanTransport,
 }: {
   kepala?: ReactNode
   /** Paksa transport tertentu; biasanya dibiarkan agar dipilih otomatis. */
   buatTransport?: FabrikTransport
-  catatanTransport?: ReactNode
 }) {
   const [mode, setMode] = useState<Mode>('pilih')
   const [fabrik, setFabrik] = useState<FabrikTransport | null>(buatTransport ?? null)
@@ -71,7 +66,7 @@ export function JelajahDunia({
       <PermainanDaring
         kepala={kepala}
         buatTransport={fabrik ?? transportSiaran}
-        catatanTransport={catatanTransport ?? (LINTAS_PERANGKAT ? undefined : CATATAN_SIARAN)}
+        lintasPerangkat={LINTAS_PERANGKAT}
         onGantiMode={() => setMode('pilih')}
       />
     )

@@ -42,6 +42,12 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       # Dijaga di sini supaya Worker yang rusak tidak pernah sampai terbit.
+      #
+      # `pnpm build` harus mendahului `pnpm typecheck`: `src/routeTree.gen.ts`
+      # dibangkitkan plugin router dan sengaja tidak di-commit, jadi di clone
+      # bersih tsc melaporkan puluhan galat palsu pada berkas rute bila belum
+      # dibangun. Sekalian memastikan panelnya sendiri masih bisa dibangun.
+      - run: pnpm build
       - run: pnpm typecheck
       - run: pnpm typecheck:worker
       - run: pnpm test

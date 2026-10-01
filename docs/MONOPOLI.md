@@ -174,6 +174,23 @@ BroadcastChannel (lihat `jelajah-dunia.tsx`).
 
 Satu deploy menyajikan permainan sekaligus ruangnya, di satu URL.
 
+Dua cara, pilih salah satu.
+
+**Lewat GitHub Actions** — tidak perlu memasang apa pun di komputer, dan
+tokennya tidak pernah lewat terminal. Isi dua secret di repo (Settings →
+Secrets and variables → Actions):
+
+| Secret | Dari mana |
+|---|---|
+| `CLOUDFLARE_API_TOKEN` | dash.cloudflare.com/profile/api-tokens, template "Edit Cloudflare Workers" |
+| `CLOUDFLARE_ACCOUNT_ID` | sidebar dashboard Workers & Pages |
+
+Setelah itu `.github/workflows/terbitkan-worker.yml` menerbitkan ulang setiap
+kali `src/`, `worker/`, atau `wrangler.jsonc` berubah. Bisa juga dijalankan
+manual dari tab Actions.
+
+**Dari komputer sendiri:**
+
 ```bash
 pnpm dlx wrangler login   # sekali saja, membuka browser
 pnpm cf:deploy            # build + terbitkan

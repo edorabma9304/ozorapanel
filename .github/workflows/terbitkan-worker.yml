@@ -1,0 +1,57 @@
+# Terbitkan permainan + server ruangnya sebagai satu Worker Cloudflare.
+#
+# Dijalankan di runner GitHub, bukan di komputer siapa pun, jadi tidak perlu
+# memasang Node atau wrangler di mana-mana.
+#
+# Sebelum jalan pertama kali, isi dua secret di repo
+# (Settings -> Secrets and variables -> Actions -> New repository secret):
+#
+#   CLOUDFLARE_API_TOKEN    buat di dash.cloudflare.com/profile/api-tokens
+#                           dengan template "Edit Cloudflare Workers"
+#   CLOUDFLARE_ACCOUNT_ID   ada di sidebar dashboard Workers & Pages
+#
+# Token tersimpan terenkripsi di GitHub dan tidak pernah tampil di log.
+name: Terbitkan Worker
+
+on:
+  push:
+    branches: [main, claude/happy-ptolemy-by88pt]
+    # Hanya saat yang memengaruhi Worker berubah — bukan tiap commit dokumen.
+    paths:
+      - 'src/**'
+      - 'worker/**'
+      - 'artifact/**'
+      - 'wrangler.jsonc'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/terbitkan-worker.yml'
+  workflow_dispatch:
+
+jobs:
+  terbitkan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Dijaga di sini supaya Worker yang rusak tidak pernah sampai terbit.
+      - run: pnpm typecheck
+      - run: pnpm typecheck:worker
+      - run: pnpm test
+
+      # VITE_SERVER_RUANG menyalakan transport HTTP di klien; tanpa itu
+      # permainan jatuh ke mode antar tab dan kode ruang tidak menyeberang.
+      - name: Bangun permainan
+        run: pnpm cf:build
+
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

@@ -7,7 +7,10 @@
 # (Settings -> Secrets and variables -> Actions -> New repository secret):
 #
 #   CLOUDFLARE_API_TOKEN    buat di dash.cloudflare.com/profile/api-tokens
-#                           dengan template "Edit Cloudflare Workers"
+#                           dengan template "Edit Cloudflare Workers". Jangan
+#                           dibatasi ke "Specified Workers": Worker ini belum
+#                           ada, dan membuat Worker baru menuntut izin tingkat
+#                           produk, bukan per-Worker.
 #   CLOUDFLARE_ACCOUNT_ID   ada di sidebar dashboard Workers & Pages
 #
 # Token tersimpan terenkripsi di GitHub dan tidak pernah tampil di log.
@@ -57,7 +60,7 @@ jobs:
       - name: Bangun permainan
         run: pnpm cf:build
 
-      - uses: cloudflare/wrangler-action@v3
+      - uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
